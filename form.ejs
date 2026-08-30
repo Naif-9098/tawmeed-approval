@@ -1,0 +1,135 @@
+<%- include('../partials/header', { title: mode === 'new' ? 'أمر تعميد جديد' : 'تعديل أمر التعميد' }) %>
+<div class="wrap">
+  <h2 class="page-title"><%= mode === 'new' ? 'أمر تعميد جديد' : 'تعديل أمر التعميد رقم ' + order.order_no %></h2>
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+  <% if (mode === 'edit' && order.status === 'returned_for_edit') { %>
+    <div class="alert alert-error">تمت إعادة هذا الأمر للتعديل من قبل المعتمد. راجع صفحة عرض الأمر لقراءة الملاحظة، ثم عدّل وأعد الإرسال.</div>
+  <% } %>
+
+  <form method="POST" action="<%= mode === 'new' ? '/orders/new' : '/orders/' + order.id + '/edit' %>">
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-field"><label>نطاق العمل</label><input name="scope" value="<%= order ? (order.scope||'') : '' %>"></div>
+        <div class="form-field"><label>الكود</label><input name="code" value="<%= order ? (order.code||'') : '' %>"></div>
+        <div class="form-field"><label>اسم المشروع</label><input name="project_name" value="<%= order ? (order.project_name||'') : '' %>"></div>
+        <div class="form-field"><label>مسؤول المشروع</label><input name="project_manager" value="<%= order ? (order.project_manager||'') : '' %>"></div>
+        <div class="form-field"><label>رقم التواصل</label><input name="phone" value="<%= order ? (order.phone||'') : '' %>"></div>
+        <div class="form-field"><label>المقاول / المورد</label><input name="contractor_name" value="<%= order ? (order.contractor_name||'') : '' %>"></div>
+        <div class="form-field"><label>التاريخ</label><input type="date" name="order_date" value="<%= order && order.order_date ? new Date(order.order_date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10) %>"></div>
+        <div class="form-field"><label>نسبة الضريبة %</label><input type="number" step="any" name="vat_rate" id="vat-rate" value="<%= order ? order.vat_rate : 15 %>" oninput="calcAll()"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">وصف الأعمال / البنود</h3>
+      <table>
+        <thead><tr><th style="width:40px;">#</th><th>وصف البند</th><th style="width:90px;">الكمية</th><th style="width:90px;">الوحدة</th><th style="width:110px;">سعر الوحدة</th><th style="width:110px;">الإجمالي</th><th style="width:36px;"></th></tr></thead>
+        <tbody id="items-body"></tbody>
+      </table>
+      <button type="button" class="add-row" onclick="addItemRow()">+ إضافة بند</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">الالتزامات والشروط</h3>
+      <div class="form-field"><textarea name="obligations_text" rows="5"><%= order ? (order.obligations_text||'') : '' %></textarea></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">جدول الدفعات</h3>
+      <table>
+        <thead><tr><th style="width:40px;">#</th><th>وصف الدفعة</th><th style="width:90px;">النسبة %</th><th style="width:120px;">القيمة</th><th style="width:36px;"></th></tr></thead>
+        <tbody id="pay-body"></tbody>
+      </table>
+      <button type="button" class="add-row" onclick="addPayRow()">+ إضافة دفعة</button>
+      <div style="text-align:left; font-weight:700; margin-top:10px;">
+        الإجمالي بدون الضريبة: <span class="mono" id="subtotal-disp">0.00</span> —
+        الضريبة: <span class="mono" id="vat-disp">0.00</span> —
+        المجموع: <span class="mono" id="grand-disp">0.00</span>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="<%= mode === 'new' ? '/orders' : '/orders/' + order.id %>" class="btn btn-ghost">إلغاء</a>
+    </div>
+  </form>
+</div>
+
+<script>
+let itemSeq = 0, paySeq = 0;
+
+function addItemRow(desc, qty, unit, price){
+  itemSeq++;
+  const tbody = document.getElementById('items-body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="mono">${tbody.children.length + 1}</td>
+    <td><input type="text" name="item_desc" style="width:100%;border:none;text-align:right;" value="${desc ? desc.replace(/"/g,'&quot;') : ''}" placeholder="وصف البند"></td>
+    <td><input type="number" step="any" name="item_qty" style="width:100%;border:none;text-align:center;" value="${qty||''}" oninput="calcAll()"></td>
+    <td><input type="text" name="item_unit" style="width:100%;border:none;text-align:center;" value="${unit||''}" placeholder="م²"></td>
+    <td><input type="number" step="any" name="item_price" style="width:100%;border:none;text-align:center;" value="${price||''}" oninput="calcAll()"></td>
+    <td class="mono item-total">0.00</td>
+    <td><button type="button" class="row-del" onclick="this.closest('tr').remove(); renumber(); calcAll();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addPayRow(desc, pct){
+  paySeq++;
+  const tbody = document.getElementById('pay-body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="mono">${tbody.children.length + 1}</td>
+    <td><input type="text" name="pay_desc" style="width:100%;border:none;text-align:right;" value="${desc ? desc.replace(/"/g,'&quot;') : ''}" placeholder="وصف الدفعة"></td>
+    <td><input type="number" step="any" name="pay_pct" style="width:100%;border:none;text-align:center;" value="${pct||''}" oninput="calcAll()"></td>
+    <td class="mono pay-value">0.00</td>
+    <td><button type="button" class="row-del" onclick="this.closest('tr').remove(); renumberPay(); calcAll();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function renumber(){ document.querySelectorAll('#items-body tr').forEach((r,i)=>{ r.children[0].textContent = i+1; }); }
+function renumberPay(){ document.querySelectorAll('#pay-body tr').forEach((r,i)=>{ r.children[0].textContent = i+1; }); }
+
+function fmt(n){ if(isNaN(n)) n=0; return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function calcAll(){
+  let subtotal = 0;
+  document.querySelectorAll('#items-body tr').forEach(tr=>{
+    const qty = parseFloat(tr.querySelector('[name=item_qty]').value)||0;
+    const price = parseFloat(tr.querySelector('[name=item_price]').value)||0;
+    const total = qty*price;
+    tr.querySelector('.item-total').textContent = fmt(total);
+    subtotal += total;
+  });
+  const vatRate = parseFloat(document.getElementById('vat-rate').value)||0;
+  const vatAmount = subtotal*vatRate/100;
+  const grand = subtotal+vatAmount;
+  document.getElementById('subtotal-disp').textContent = fmt(subtotal);
+  document.getElementById('vat-disp').textContent = fmt(vatAmount);
+  document.getElementById('grand-disp').textContent = fmt(grand);
+
+  document.querySelectorAll('#pay-body tr').forEach(tr=>{
+    const pct = parseFloat(tr.querySelector('[name=pay_pct]').value)||0;
+    tr.querySelector('.pay-value').textContent = fmt(grand*pct/100);
+  });
+}
+
+// تحميل البيانات الحالية عند التعديل
+const existingItems = <%- JSON.stringify(items || []) %>;
+const existingPayments = <%- JSON.stringify(payments || []) %>;
+
+if(existingItems.length){
+  existingItems.forEach(it => addItemRow(it.description, it.qty, it.unit, it.unit_price));
+} else {
+  for(let i=0;i<4;i++) addItemRow();
+}
+if(existingPayments.length){
+  existingPayments.forEach(p => addPayRow(p.description, p.pct));
+} else {
+  for(let i=0;i<2;i++) addPayRow();
+}
+calcAll();
+</script>
+</body>
+</html>

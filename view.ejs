@@ -1,0 +1,122 @@
+<%- include('../partials/header', { title: 'أمر تعميد ' + order.order_no }) %>
+<div class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+    <div>
+      <h2 class="page-title" style="margin-bottom:6px;">أمر تعميد <span class="mono"><%= order.order_no %></span></h2>
+      <span class="badge badge-<%= order.status %>"><%= statusLabels[order.status] %></span>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="/orders/<%= order.id %>/print" target="_blank" class="btn btn-ghost">🖨 عرض للطباعة / PDF</a>
+      <% if (canEdit) { %>
+        <a href="/orders/<%= order.id %>/edit" class="btn btn-ghost">تعديل</a>
+        <form method="POST" action="/orders/<%= order.id %>/submit" style="margin:0;" onsubmit="return confirm('سيتم إرسال الأمر للاعتماد ولن تتمكن من تعديله حتى تتم مراجعته. متابعة؟');">
+          <button type="submit" class="btn btn-primary">إرسال للاعتماد</button>
+        </form>
+      <% } %>
+      <a href="/orders" class="btn btn-ghost">رجوع</a>
+    </div>
+  </div>
+
+  <% const lastReturned = steps.filter(s=>s.status==='returned').slice(-1)[0];
+     const lastRejected = steps.filter(s=>s.status==='rejected').slice(-1)[0]; %>
+  <% if (order.status === 'returned_for_edit' && lastReturned) { %>
+    <div class="alert alert-error"><b>أُعيد الأمر للتعديل من قبل <%= lastReturned.acted_by_name %>:</b> <%= lastReturned.note %></div>
+  <% } %>
+  <% if (order.status === 'rejected' && lastRejected) { %>
+    <div class="alert alert-error"><b>رُفض الأمر من قبل <%= lastRejected.acted_by_name %>:</b> <%= lastRejected.note %></div>
+  <% } %>
+
+  <div class="card">
+    <div class="form-grid">
+      <div><b>نطاق العمل:</b> <%= order.scope || '—' %></div>
+      <div><b>الكود:</b> <%= order.code || '—' %></div>
+      <div><b>اسم المشروع:</b> <%= order.project_name || '—' %></div>
+      <div><b>مسؤول المشروع:</b> <%= order.project_manager || '—' %></div>
+      <div><b>رقم التواصل:</b> <%= order.phone || '—' %></div>
+      <div><b>المقاول / المورد:</b> <%= order.contractor_name || '—' %></div>
+      <div><b>التاريخ:</b> <%= order.order_date ? new Date(order.order_date).toISOString().slice(0,10) : '—' %></div>
+      <div><b>منشئ الأمر:</b> <%= creator.name %><%= creator.job_title ? ' — ' + creator.job_title : '' %></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">وصف الأعمال / البنود</h3>
+    <table>
+      <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+      <tbody>
+        <% items.forEach((it,i) => { %>
+        <tr><td><%= i+1 %></td><td style="text-align:right;"><%= it.description %></td><td class="mono"><%= it.qty %></td><td><%= it.unit %></td><td class="mono"><%= Number(it.unit_price).toLocaleString('en-US',{minimumFractionDigits:2}) %></td><td class="mono"><%= Number(it.total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div style="text-align:left; font-weight:700; margin-top:10px;">
+      الإجمالي بدون الضريبة: <span class="mono"><%= Number(order.subtotal).toLocaleString('en-US',{minimumFractionDigits:2}) %></span> —
+      الضريبة (<%= order.vat_rate %>%): <span class="mono"><%= Number(order.vat_amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></span> —
+      المجموع: <span class="mono" style="font-size:16px;"><%= Number(order.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></span>
+    </div>
+  </div>
+
+  <% if (order.obligations_text) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">الالتزامات والشروط</h3>
+    <p style="white-space:pre-wrap; margin:0;"><%= order.obligations_text %></p>
+  </div>
+  <% } %>
+
+  <div class="card">
+    <h3 style="margin-top:0;">جدول الدفعات</h3>
+    <table>
+      <thead><tr><th>#</th><th>الوصف</th><th>النسبة %</th><th>القيمة</th></tr></thead>
+      <tbody>
+        <% payments.forEach((p,i) => { %>
+        <tr><td><%= i+1 %></td><td style="text-align:right;"><%= p.description %></td><td class="mono"><%= p.pct %></td><td class="mono"><%= Number(p.value).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">مسار الاعتماد</h3>
+    <div class="steps-list">
+      <% if (steps.length === 0) { %><div style="color:#999; font-size:13px;">لم يُرسل الأمر للاعتماد بعد.</div><% } %>
+      <% steps.forEach(s => { %>
+      <div class="step-item">
+        <div>
+          <div class="s-name">مستوى <%= s.level_number %>: <%= s.level_name %></div>
+          <% if (s.acted_by_name) { %>
+            <div class="s-meta"><%= s.acted_by_name %><%= s.acted_by_title ? ' — ' + s.acted_by_title : '' %> — <%= new Date(s.acted_at).toLocaleString('ar-SA') %></div>
+            <% if (s.note) { %><div class="s-meta">ملاحظة: <%= s.note %></div><% } %>
+          <% } %>
+        </div>
+        <span class="badge badge-<%= s.status==='approved' ? 'approved' : (s.status==='rejected' ? 'rejected' : (s.status==='returned' ? 'returned_for_edit' : 'pending_approval')) %>">
+          <%= s.status==='approved' ? 'معتمد' : (s.status==='rejected' ? 'مرفوض' : (s.status==='returned' ? 'أُعيد للتعديل' : 'بانتظار الاعتماد')) %>
+        </span>
+      </div>
+      <% }) %>
+    </div>
+
+    <% if (order.status === 'approved') { %>
+      <div class="stamp-box">
+        <h4>✓ تم الاعتماد إلكترونيًا</h4>
+        <div class="s-line"><b>اسم المعتمد:</b> <%= order.final_approved_by_name %></div>
+        <% if (order.final_approved_by_title) { %><div class="s-line"><b>المسمى الوظيفي:</b> <%= order.final_approved_by_title %></div><% } %>
+        <div class="s-line"><b>التاريخ والوقت:</b> <%= new Date(order.final_approved_at).toLocaleString('ar-SA') %></div>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">سجل العمليات</h3>
+    <ul class="audit-list">
+      <% audit.forEach(a => { %>
+      <li>
+        <div class="a-action"><%= a.action %></div>
+        <div class="a-meta">بواسطة: <%= a.actor_name %> — <%= new Date(a.created_at).toLocaleString('ar-SA') %></div>
+        <% if (a.details) { %><div class="a-details"><%= a.details %></div><% } %>
+      </li>
+      <% }) %>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

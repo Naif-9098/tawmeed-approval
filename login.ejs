@@ -1,0 +1,20 @@
+<%- include('partials/header', { title: 'تسجيل الدخول' }) %>
+<div class="wrap-narrow">
+  <div class="card">
+    <h2 class="page-title" style="text-align:center;">تسجيل الدخول</h2>
+    <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+    <form method="POST" action="/login">
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>البريد الإلكتروني</label>
+        <input type="email" name="email" required autofocus>
+      </div>
+      <div class="form-field" style="margin-bottom:16px;">
+        <label>كلمة المرور</label>
+        <input type="password" name="password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">دخول</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= typeof title !== 'undefined' ? title + ' — نظام أوامر التعميد' : 'نظام أوامر التعميد' %></title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<% if (typeof currentUser !== 'undefined' && currentUser) { %>
+<div class="topbar no-print">
+  <div class="brand">
+    <div class="mark">أت</div>
+    <h1>نظام أوامر التعميد</h1>
+  </div>
+  <div class="nav-links">
+    <a href="/orders">أوامري</a>
+    <% if (currentUser.role === 'approver' || currentUser.role === 'admin') { %>
+      <a href="/approvals">طلبات الاعتماد</a>
+    <% } %>
+    <% if (currentUser.role === 'admin') { %>
+      <a href="/admin/orders">كل الأوامر</a>
+      <a href="/admin/users">المستخدمون</a>
+      <a href="/admin/audit-log">سجل العمليات</a>
+      <a href="/admin/settings">إعدادات الاعتماد</a>
+    <% } %>
+  </div>
+  <div class="nav-user">
+    <span><b><%= currentUser.name %></b> · <%= currentUser.role === 'admin' ? 'مدير النظام' : (currentUser.role === 'approver' ? 'معتمد' : 'موظف') %></span>
+    <form method="POST" action="/logout" style="margin:0;">
+      <button type="submit" class="btn btn-ghost btn-sm" style="color:#fff; border-color:#48597A;">خروج</button>
+    </form>
+  </div>
+</div>
+<% } %>

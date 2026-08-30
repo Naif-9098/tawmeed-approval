@@ -1,0 +1,101 @@
+<%- include('../partials/header', { title: 'مراجعة أمر ' + order.order_no }) %>
+<div class="wrap">
+  <h2 class="page-title">مراجعة أمر تعميد <span class="mono"><%= order.order_no %></span></h2>
+  <span class="badge badge-<%= order.status %>"><%= statusLabels[order.status] %></span>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="form-grid">
+      <div><b>رقم الأمر:</b> <%= order.order_no %></div>
+      <div><b>التاريخ:</b> <%= order.order_date ? new Date(order.order_date).toISOString().slice(0,10) : '—' %></div>
+      <div><b>اسم المشروع:</b> <%= order.project_name || '—' %></div>
+      <div><b>المقاول / المورد:</b> <%= order.contractor_name || '—' %></div>
+      <div><b>نطاق العمل:</b> <%= order.scope || '—' %></div>
+      <div><b>مسؤول المشروع:</b> <%= order.project_manager || '—' %></div>
+      <div><b>مُنشئ الأمر:</b> <%= creator.name %><%= creator.job_title ? ' — ' + creator.job_title : '' %></div>
+      <div><b>رقم التواصل:</b> <%= order.phone || '—' %></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">وصف الأعمال / البنود</h3>
+    <table>
+      <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+      <tbody>
+        <% items.forEach((it,i) => { %>
+        <tr><td><%= i+1 %></td><td style="text-align:right;"><%= it.description %></td><td class="mono"><%= it.qty %></td><td><%= it.unit %></td><td class="mono"><%= Number(it.unit_price).toLocaleString('en-US',{minimumFractionDigits:2}) %></td><td class="mono"><%= Number(it.total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div style="text-align:left; font-weight:700;">
+      الإجمالي بدون الضريبة: <span class="mono"><%= Number(order.subtotal).toLocaleString('en-US',{minimumFractionDigits:2}) %></span> —
+      الضريبة (<%= order.vat_rate %>%): <span class="mono"><%= Number(order.vat_amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></span> —
+      المجموع: <span class="mono" style="font-size:16px;"><%= Number(order.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></span>
+    </div>
+  </div>
+
+  <% if (order.obligations_text) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">الالتزامات والشروط</h3>
+    <p style="white-space:pre-wrap; margin:0;"><%= order.obligations_text %></p>
+  </div>
+  <% } %>
+
+  <div class="card">
+    <h3 style="margin-top:0;">جدول الدفعات</h3>
+    <table>
+      <thead><tr><th>#</th><th>الوصف</th><th>النسبة %</th><th>القيمة</th></tr></thead>
+      <tbody>
+        <% payments.forEach((p,i) => { %>
+        <tr><td><%= i+1 %></td><td style="text-align:right;"><%= p.description %></td><td class="mono"><%= p.pct %></td><td class="mono"><%= Number(p.value).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <% if (order.status === 'pending_approval') { %>
+  <div class="card no-print" style="display:flex; gap:10px; justify-content:center; padding:22px;">
+    <form method="POST" action="/approvals/<%= order.id %>/approve" onsubmit="return confirm('سيتم تسجيل اعتمادك باسمك وتاريخ ووقت العملية. متابعة؟');" style="margin:0;">
+      <button type="submit" class="btn btn-good" style="padding:12px 28px;">✓ اعتماد</button>
+    </form>
+    <button type="button" class="btn btn-bad" style="padding:12px 28px;" onclick="openModal('reject-modal')">✕ رفض</button>
+    <button type="button" class="btn btn-ghost" style="padding:12px 28px;" onclick="openModal('return-modal')">↺ إعادة للتعديل</button>
+  </div>
+  <% } %>
+
+  <a href="/approvals" class="btn btn-ghost">رجوع لقائمة الطلبات</a>
+</div>
+
+<!-- نافذة الرفض -->
+<div class="modal-overlay" id="reject-modal">
+  <div class="modal-box">
+    <h3>سبب الرفض</h3>
+    <form method="POST" action="/approvals/<%= order.id %>/reject">
+      <textarea name="reason" required placeholder="اكتب سبب رفض هذا الأمر..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('reject-modal')">إلغاء</button>
+        <button type="submit" class="btn btn-bad">تأكيد الرفض</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- نافذة الإعادة للتعديل -->
+<div class="modal-overlay" id="return-modal">
+  <div class="modal-box">
+    <h3>ملاحظة الإعادة للتعديل</h3>
+    <form method="POST" action="/approvals/<%= order.id %>/return">
+      <textarea name="note" required placeholder="وضّح ما المطلوب تعديله..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('return-modal')">إلغاء</button>
+        <button type="submit" class="btn btn-primary">تأكيد الإعادة للتعديل</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+</script>
+</body>
+</html>

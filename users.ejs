@@ -1,0 +1,48 @@
+<%- include('../partials/header', { title: 'إدارة المستخدمين' }) %>
+<div class="wrap">
+  <h2 class="page-title">إدارة المستخدمين والصلاحيات</h2>
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <div class="card">
+    <h3 style="margin-top:0;">إضافة مستخدم جديد</h3>
+    <form method="POST" action="/admin/users/new" class="form-grid">
+      <div class="form-field"><label>الاسم</label><input name="name" required></div>
+      <div class="form-field"><label>البريد الإلكتروني</label><input type="email" name="email" required></div>
+      <div class="form-field"><label>كلمة المرور</label><input type="password" name="password" required minlength="6"></div>
+      <div class="form-field">
+        <label>الدور (Role)</label>
+        <select name="role" required>
+          <option value="employee">موظف — إنشاء وتعديل أوامر التعميد الخاصة به</option>
+          <option value="approver">معتمد — مراجعة واعتماد/رفض الطلبات</option>
+          <option value="admin">مدير النظام — إدارة كاملة</option>
+        </select>
+      </div>
+      <div class="form-field"><label>المسمى الوظيفي (اختياري)</label><input name="job_title"></div>
+      <div style="align-self:end;"><button type="submit" class="btn btn-primary">+ إضافة</button></div>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <table>
+      <thead><tr><th>الاسم</th><th>البريد الإلكتروني</th><th>الدور</th><th>المسمى الوظيفي</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        <% users.forEach(u => { %>
+        <tr>
+          <td><%= u.name %></td>
+          <td class="mono"><%= u.email %></td>
+          <td><%= u.role === 'admin' ? 'مدير النظام' : (u.role === 'approver' ? 'معتمد' : 'موظف') %></td>
+          <td><%= u.job_title || '—' %></td>
+          <td><span class="badge <%= u.active ? 'badge-approved' : 'badge-rejected' %>"><%= u.active ? 'مفعّل' : 'معطّل' %></span></td>
+          <td>
+            <form method="POST" action="/admin/users/<%= u.id %>/toggle" style="margin:0;">
+              <button type="submit" class="btn btn-ghost btn-sm"><%= u.active ? 'تعطيل' : 'تفعيل' %></button>
+            </form>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

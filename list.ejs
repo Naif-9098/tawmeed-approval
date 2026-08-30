@@ -1,0 +1,27 @@
+<%- include('../partials/header', { title: 'طلبات الاعتماد' }) %>
+<div class="wrap">
+  <h2 class="page-title">طلبات الاعتماد</h2>
+  <div class="card" style="padding:0;">
+    <% if (orders.length === 0) { %>
+      <div class="empty-state">لا توجد طلبات بانتظار اعتمادك حاليًا.</div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>رقم الأمر</th><th>المشروع</th><th>مُقدَّم بواسطة</th><th>الإجمالي</th><th>المستوى</th><th></th></tr></thead>
+      <tbody>
+        <% orders.forEach(o => { %>
+        <tr>
+          <td class="mono"><%= o.order_no %></td>
+          <td><%= o.project_name || '—' %></td>
+          <td><%= o.creator_name %></td>
+          <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+          <td><%= o.level_name %></td>
+          <td><a href="/approvals/<%= o.id %>" class="btn btn-primary btn-sm">مراجعة</a></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+</body>
+</html>

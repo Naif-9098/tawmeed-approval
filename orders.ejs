@@ -1,0 +1,24 @@
+<%- include('../partials/header', { title: 'كل أوامر التعميد' }) %>
+<div class="wrap">
+  <h2 class="page-title">كل أوامر التعميد</h2>
+  <div class="card" style="padding:0;">
+    <table>
+      <thead><tr><th>رقم الأمر</th><th>المشروع</th><th>المُنشئ</th><th>الإجمالي</th><th>الحالة</th><th>آخر تحديث</th><th></th></tr></thead>
+      <tbody>
+        <% orders.forEach(o => { %>
+        <tr>
+          <td class="mono"><%= o.order_no %></td>
+          <td><%= o.project_name || '—' %></td>
+          <td><%= o.creator_name %></td>
+          <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+          <td><span class="badge badge-<%= o.status %>"><%= statusLabels[o.status] %></span></td>
+          <td class="mono" style="font-size:11.5px;"><%= new Date(o.updated_at).toLocaleString('ar-SA') %></td>
+          <td><a href="/orders/<%= o.id %>" class="btn btn-ghost btn-sm">عرض</a></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>التحقق من أمر التعميد</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="wrap-narrow">
+  <div class="card">
+    <% if (found) { %>
+      <div class="verify-hero">
+        <div class="verify-ok">✓ هذا المستند مطابق لأمر التعميد الإلكتروني المسجل في النظام</div>
+      </div>
+      <table style="margin-top:10px;">
+        <tbody>
+          <tr><td style="text-align:right; font-weight:700; width:40%;">رقم الأمر</td><td class="mono"><%= order.order_no %></td></tr>
+          <tr><td style="text-align:right; font-weight:700;">اسم المشروع</td><td><%= order.project_name || '—' %></td></tr>
+          <tr><td style="text-align:right; font-weight:700;">اسم المقاول</td><td><%= order.contractor_name || '—' %></td></tr>
+          <tr><td style="text-align:right; font-weight:700;">قيمة الأمر</td><td class="mono"><%= Number(order.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+          <tr><td style="text-align:right; font-weight:700;">حالة الأمر</td><td><span class="badge badge-approved">معتمد</span></td></tr>
+          <tr><td style="text-align:right; font-weight:700;">اسم المعتمد</td><td><%= order.final_approved_by_name %></td></tr>
+          <tr><td style="text-align:right; font-weight:700;">تاريخ الاعتماد</td><td class="mono"><%= new Date(order.final_approved_at).toLocaleString('ar-SA') %></td></tr>
+        </tbody>
+      </table>
+    <% } else { %>
+      <div class="verify-hero">
+        <div class="verify-bad">✕ تعذر التحقق من صحة أمر التعميد</div>
+        <p style="color:#777; font-size:13px; margin-top:10px;">الرمز غير صحيح، أو أن الأمر غير موجود، أو لم يتم اعتماده بعد.</p>
+      </div>
+    <% } %>
+  </div>
+</div>
+</body>
+</html>

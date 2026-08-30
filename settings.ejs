@@ -1,0 +1,48 @@
+<%- include('../partials/header', { title: 'إعدادات الاعتماد' }) %>
+<div class="wrap">
+  <h2 class="page-title">إعدادات مستويات الاعتماد</h2>
+  <p style="color:#777; font-size:13px; margin-top:-10px;">
+    النظام مُجهّز لدعم أكثر من مستوى اعتماد بالتسلسل (مثال: مسؤول التعميد ← مدير المشروع ← المدير المالي ← المدير العام).
+    فعّليًا حاليًا يوجد مستوى واحد مُفعّل، ويمكنك إضافة مستويات جديدة من هنا وتفعيلها عند الحاجة.
+    يمر الأمر عبر المستويات المُفعّلة بترتيب الرقم (level_number) تصاعديًا، ولا يُعتبر "معتمدًا نهائيًا" إلا بعد اجتيازه لآخر مستوى مُفعّل.
+  </p>
+
+  <div class="card">
+    <h3 style="margin-top:0;">إضافة مستوى اعتماد جديد</h3>
+    <form method="POST" action="/admin/settings/levels/new" class="form-grid">
+      <div class="form-field"><label>الترتيب (رقم)</label><input type="number" name="level_number" required min="1"></div>
+      <div class="form-field"><label>اسم المستوى</label><input name="level_name" required placeholder="مثال: المدير المالي"></div>
+      <div class="form-field">
+        <label>الدور المطلوب للاعتماد في هذا المستوى</label>
+        <select name="required_role">
+          <option value="approver">معتمد (Role: approver)</option>
+          <option value="admin">مدير النظام (Role: admin)</option>
+        </select>
+      </div>
+      <div style="align-self:end;"><button type="submit" class="btn btn-primary">+ إضافة مستوى</button></div>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <table>
+      <thead><tr><th>الترتيب</th><th>اسم المستوى</th><th>الدور المطلوب</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        <% levels.forEach(l => { %>
+        <tr>
+          <td class="mono"><%= l.level_number %></td>
+          <td><%= l.level_name %></td>
+          <td><%= l.required_role === 'admin' ? 'مدير النظام' : 'معتمد' %></td>
+          <td><span class="badge <%= l.active ? 'badge-approved' : 'badge-rejected' %>"><%= l.active ? 'مُفعّل' : 'غير مُفعّل' %></span></td>
+          <td>
+            <form method="POST" action="/admin/settings/levels/<%= l.id %>/toggle" style="margin:0;">
+              <button type="submit" class="btn btn-ghost btn-sm"><%= l.active ? 'تعطيل' : 'تفعيل' %></button>
+            </form>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

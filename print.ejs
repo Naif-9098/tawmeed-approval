@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>طباعة أمر تعميد <%= order.order_no %></title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#111315; --line:#111315; --line-soft:#B9BEC4; --grey-label:#EAEAEA; --amber:#E8960C; --navy:#16233A; --good:#1E7D4B; --bad:#B3261E; }
+  *{box-sizing:border-box;}
+  body{font-family:'IBM Plex Sans Arabic','Tajawal',sans-serif; color:var(--ink); margin:0; padding:24px; background:#fff;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .toolbar{text-align:center; margin-bottom:16px;}
+  .toolbar button{font-family:'Tajawal'; font-weight:700; background:var(--amber); color:var(--navy); border:none; padding:10px 22px; border-radius:6px; cursor:pointer;}
+  .sheet{max-width:900px; margin:0 auto; border:1.5px solid var(--line); border-radius:2px;}
+  .head-row{display:grid; grid-template-columns:1fr 1fr 1fr; border-bottom:2.5px solid var(--line); padding:14px 16px; align-items:center;}
+  .head-row h2{font-family:'Tajawal'; font-weight:900; font-size:26px; margin:0; text-align:left;}
+  .ordno{text-align:center; font-family:'JetBrains Mono'; font-weight:700; color:var(--bad); font-size:16px;}
+  .info-grid{display:grid; grid-template-columns:1fr 2fr 1fr 2fr; font-size:13.5px;}
+  .info-grid .lbl{background:var(--grey-label); border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft); padding:8px 10px; font-weight:700; text-align:right;}
+  .info-grid .val{border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft); padding:8px 10px;}
+  table{width:100%; border-collapse:collapse; margin:16px 0;}
+  thead th{border:1px solid var(--line); font-size:12.5px; padding:8px; text-align:center;}
+  tbody td{border:1px solid var(--line-soft); padding:7px; text-align:center; font-size:13px;}
+  .section-title{font-family:'Tajawal'; font-weight:900; font-size:17px; margin:20px 16px 8px;}
+  .box{margin:0 16px 16px; padding:10px 14px; border:1px solid var(--line-soft); border-radius:4px; font-size:13.5px; white-space:pre-wrap;}
+  .totals{padding:10px 16px; text-align:left; font-weight:700; font-size:14px;}
+  .sig-area{display:grid; grid-template-columns:1fr 1fr; border-top:2px solid var(--line); margin-top:10px;}
+  .sig-cell{padding:18px 16px; text-align:center;}
+  .sig-cell + .sig-cell{border-right:1px solid var(--line-soft);}
+  .sig-pending{color:#888; font-weight:700; border:2px dashed var(--line-soft); border-radius:6px; padding:14px;}
+  .sig-approved{border:2px solid var(--good); border-radius:6px; padding:14px;}
+  .sig-approved .tick{color:var(--good); font-weight:900; font-size:15px; margin-bottom:6px;}
+  .sig-approved .line{font-size:12.5px; margin:2px 0;}
+  .qr-box{margin-top:10px;}
+  .qr-box img{width:110px; height:110px;}
+  .foot-note{text-align:center; font-size:11px; color:#999; margin-top:16px; font-family:'JetBrains Mono';}
+  @media print{ .toolbar{display:none;} body{padding:0;} .sheet{border:none;} }
+</style>
+</head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">🖨 طباعة / حفظ كـ PDF</button></div>
+  <div class="sheet">
+    <div class="head-row">
+      <div class="ordno">رقم الأمر<br><%= order.order_no %></div>
+      <div style="text-align:center; font-size:11px; color:#666;">WORK ASSIGNMENT ORDER</div>
+      <h2>أمر تعميد</h2>
+    </div>
+    <div class="info-grid">
+      <div class="lbl">نطاق العمل:</div><div class="val"><%= order.scope || '' %></div>
+      <div class="lbl">التاريخ:</div><div class="val mono"><%= order.order_date ? new Date(order.order_date).toISOString().slice(0,10) : '' %></div>
+      <div class="lbl">الكود:</div><div class="val mono"><%= order.code || '' %></div>
+      <div class="lbl">المشروع:</div><div class="val"><%= order.project_name || '' %></div>
+      <div class="lbl">رقم التواصل:</div><div class="val mono"><%= order.phone || '' %></div>
+      <div class="lbl">مسؤول المشروع:</div><div class="val"><%= order.project_manager || '' %></div>
+      <div class="lbl">&nbsp;</div><div class="val"></div>
+      <div class="lbl">المقاول:</div><div class="val"><%= order.contractor_name || '' %></div>
+    </div>
+
+    <table>
+      <thead><tr><th style="width:36px;">الرقم</th><th>وصف الأعمال</th><th style="width:70px;">الكمية</th><th style="width:70px;">الوحدة</th><th style="width:90px;">سعر الوحدة</th><th style="width:100px;">الإجمالي</th></tr></thead>
+      <tbody>
+        <% items.forEach((it,i) => { %>
+        <tr><td class="mono"><%= i+1 %></td><td style="text-align:right;"><%= it.description %></td><td class="mono"><%= it.qty %></td><td><%= it.unit %></td><td class="mono"><%= Number(it.unit_price).toLocaleString('en-US',{minimumFractionDigits:2}) %></td><td class="mono"><%= Number(it.total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <% if (order.obligations_text) { %>
+      <div class="section-title">الالتزامات والدفعات</div>
+      <div class="box"><%= order.obligations_text %></div>
+    <% } %>
+
+    <div class="totals">
+      الإجمالي بدون الضريبة: <span class="mono"><%= Number(order.subtotal).toLocaleString('en-US',{minimumFractionDigits:2}) %></span> &nbsp;|&nbsp;
+      الضريبة (<%= order.vat_rate %>%): <span class="mono"><%= Number(order.vat_amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></span> &nbsp;|&nbsp;
+      المجموع: <span class="mono"><%= Number(order.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></span>
+    </div>
+
+    <table>
+      <thead><tr><th style="width:80px;">رقم الدفعة</th><th>وصف الدفعة</th><th style="width:90px;">النسبة</th><th style="width:110px;">القيمة</th></tr></thead>
+      <tbody>
+        <% payments.forEach((p,i) => { %>
+        <tr><td class="mono"><%= i+1 %></td><td style="text-align:right;"><%= p.description %></td><td class="mono"><%= p.pct %>%</td><td class="mono"><%= Number(p.value).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <!-- ===== منطقة التوقيع / الاعتماد الإلكتروني (بديل خانة التوقيع الورقية) ===== -->
+    <div class="sig-area">
+      <div class="sig-cell">
+        <% if (order.status === 'approved') { %>
+          <div class="sig-approved">
+            <div class="tick">✓ معتمد إلكترونيًا</div>
+            <div class="line"><b>الاسم:</b> <%= order.final_approved_by_name %></div>
+            <% if (order.final_approved_by_title) { %><div class="line"><b>المسمى الوظيفي:</b> <%= order.final_approved_by_title %></div><% } %>
+            <div class="line"><b>التاريخ:</b> <%= new Date(order.final_approved_at).toLocaleDateString('en-CA') %></div>
+            <div class="line"><b>الوقت:</b> <%= new Date(order.final_approved_at).toLocaleTimeString('ar-SA') %></div>
+          </div>
+          <% if (qrDataUrl) { %>
+          <div class="qr-box">
+            <img src="<%= qrDataUrl %>" alt="QR Code للتحقق">
+            <div style="font-size:10.5px; color:#888;">امسح للتحقق من صحة الأمر</div>
+          </div>
+          <% } %>
+        <% } else { %>
+          <div class="sig-pending">بانتظار الاعتماد الإلكتروني</div>
+        <% } %>
+      </div>
+      <div class="sig-cell">
+        <div style="font-size:12.5px; color:#666;">المقاول</div>
+        <div style="margin-top:24px; border-bottom:1px solid var(--line-soft); width:70%; margin-inline:auto;"></div>
+      </div>
+    </div>
+
+    <div class="foot-note">
+      رقم مرجعي للتحقق: <%= order.public_token.slice(0,8) %>… — يُعتبر هذا المستند نسخة رسمية صادرة من نظام أوامر التعميد الإلكتروني
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<%- include('../partials/header', { title: 'سجل العمليات' }) %>
+<div class="wrap">
+  <h2 class="page-title">سجل العمليات (Audit Log)</h2>
+  <p style="color:#777; font-size:13px; margin-top:-10px;">سجل للعرض فقط — لا يوجد في النظام أي وسيلة لتعديل أو حذف صف من هذا السجل، لا من هذه الصفحة ولا من أي مكان آخر.</p>
+  <div class="card" style="padding:0;">
+    <table>
+      <thead><tr><th>الوقت</th><th>الإجراء</th><th>بواسطة</th><th>رقم الأمر</th><th>تفاصيل</th></tr></thead>
+      <tbody>
+        <% logs.forEach(l => { %>
+        <tr>
+          <td class="mono" style="font-size:11.5px;"><%= new Date(l.created_at).toLocaleString('ar-SA') %></td>
+          <td><%= l.action %></td>
+          <td><%= l.actor_name %></td>
+          <td class="mono"><%= l.order_no || '—' %></td>
+          <td style="text-align:right; font-size:12px;"><%= l.details || '' %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
