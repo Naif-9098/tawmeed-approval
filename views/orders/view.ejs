@@ -1,9 +1,17 @@
-<%- include('../partials/header', { title: 'أمر تعميد ' + order.order_no }) %>
+<%- include('../partials/header', { title: 'أمر تعميد ' + (order.project_order_no || order.order_no) }) %>
 <div class="wrap">
+  <% if (order.project_id) { %>
+    <%- include('../partials/breadcrumbs', { crumbs: [
+      { label: 'المشاريع', url: '/projects' },
+      { label: order.project_name_rel || order.project_name, url: '/projects/' + order.project_id },
+      { label: order.project_order_no || order.order_no }
+    ] }) %>
+  <% } %>
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
     <div>
-      <h2 class="page-title" style="margin-bottom:6px;">أمر تعميد <span class="mono"><%= order.order_no %></span></h2>
+      <h2 class="page-title" style="margin-bottom:6px;">أمر تعميد <span class="mono"><%= order.project_order_no || order.order_no %></span></h2>
       <span class="badge badge-<%= order.status %>"><%= statusLabels[order.status] %></span>
+      <% if (order.project_id) { %><span class="badge" style="background:#E9EEF9; color:#3454A0;">مشروع: <%= order.project_name_rel || order.project_name %></span><% } %>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <a href="/orders/<%= order.id %>/print" target="_blank" class="btn btn-ghost">🖨 عرض للطباعة / PDF</a>
@@ -30,14 +38,47 @@
     <div class="form-grid">
       <div><b>نطاق العمل:</b> <%= order.scope || '—' %></div>
       <div><b>الكود:</b> <%= order.code || '—' %></div>
-      <div><b>اسم المشروع:</b> <%= order.project_name || '—' %></div>
+      <div><b>اسم المشروع:</b> <%= order.project_name_rel || order.project_name || '—' %></div>
       <div><b>مسؤول المشروع:</b> <%= order.project_manager || '—' %></div>
       <div><b>رقم التواصل:</b> <%= order.phone || '—' %></div>
       <div><b>المقاول / المورد:</b> <%= order.contractor_name || '—' %></div>
       <div><b>التاريخ:</b> <%= order.order_date ? new Date(order.order_date).toISOString().slice(0,10) : '—' %></div>
       <div><b>منشئ الأمر:</b> <%= creator.name %><%= creator.job_title ? ' — ' + creator.job_title : '' %></div>
+      <div><b>المعتمد المسؤول:</b> <%= assignedApprover ? assignedApprover.name : 'بدون تحديد (أي معتمد بصلاحية)' %></div>
     </div>
   </div>
+
+  <% if (currentUser.role === 'admin') { %>
+  <div class="card">
+    <h3 style="margin-top:0;">أدوات مدير النظام</h3>
+    <div class="form-grid">
+      <div>
+        <label style="display:block; font-size:12.5px; font-weight:700; margin-bottom:5px;">نقل الأمر لمشروع آخر</label>
+        <form method="POST" action="/orders/<%= order.id %>/move" style="display:flex; gap:8px;" onsubmit="return confirm('سيتم نقل هذا الأمر إلى المشروع المحدد وتوليد رقم جديد له داخله. متابعة؟');">
+          <select name="project_id" required style="flex:1;">
+            <option value="">اختر مشروعًا...</option>
+            <% allProjects.forEach(p => { %>
+              <option value="<%= p.id %>" <%= order.project_id === p.id ? 'selected' : '' %>><%= p.name %> (<%= p.code %>)</option>
+            <% }) %>
+          </select>
+          <button type="submit" class="btn btn-ghost btn-sm">نقل</button>
+        </form>
+      </div>
+      <div>
+        <label style="display:block; font-size:12.5px; font-weight:700; margin-bottom:5px;">تعيين المعتمد المسؤول عن هذا الأمر</label>
+        <form method="POST" action="/orders/<%= order.id %>/assign-approver" style="display:flex; gap:8px;">
+          <select name="approver_id" style="flex:1;">
+            <option value="">— بدون تحديد —</option>
+            <% approversList.forEach(a => { %>
+              <option value="<%= a.id %>" <%= order.assigned_approver_id === a.id ? 'selected' : '' %>><%= a.name %></option>
+            <% }) %>
+          </select>
+          <button type="submit" class="btn btn-ghost btn-sm">حفظ</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <% } %>
 
   <div class="card">
     <h3 style="margin-top:0;">وصف الأعمال / البنود</h3>
