@@ -1,0 +1,160 @@
+<%- include('../partials/header', { title: 'مستخلص ' + cert.cert_no }) %>
+<div class="wrap">
+  <%- include('../partials/breadcrumbs', { crumbs: [
+    { label: 'المشاريع', url: '/projects' },
+    { label: order.project_name_rel || order.project_name || 'بدون مشروع', url: order.project_id ? '/projects/' + order.project_id : '/orders' },
+    { label: order.project_order_no || order.order_no, url: '/orders/' + order.id },
+    { label: 'مستخلص ' + cert.cert_no }
+  ] }) %>
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+    <div>
+      <h2 class="page-title" style="margin-bottom:6px;">مستخلص <span class="mono"><%= cert.cert_no %></span></h2>
+      <span class="badge badge-<%= cert.status %>"><%= statusLabels[cert.status] %></span>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="/certificates/<%= cert.id %>/print" target="_blank" class="btn btn-ghost">🖨 عرض للطباعة / PDF</a>
+      <% if (canEdit) { %>
+        <a href="/certificates/<%= cert.id %>/edit" class="btn btn-ghost">تعديل</a>
+        <form method="POST" action="/certificates/<%= cert.id %>/submit" style="margin:0;" onsubmit="return confirm('سيتم إرسال المستخلص للمراجعة. متابعة؟');">
+          <button type="submit" class="btn btn-primary">إرسال للمراجعة</button>
+        </form>
+      <% } %>
+      <a href="/orders/<%= order.id %>" class="btn btn-ghost">رجوع لأمر التعميد</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="form-grid">
+      <div><b>رقم أمر التعميد:</b> <%= order.project_order_no || order.order_no %></div>
+      <div><b>المشروع:</b> <%= order.project_name_rel || order.project_name || '—' %></div>
+      <div><b>مسؤول المشروع:</b> <%= order.project_manager || '—' %></div>
+      <div><b>المقاول / المورد:</b> <%= order.contractor_name || '—' %></div>
+      <div><b>التاريخ:</b> <%= cert.cert_date ? new Date(cert.cert_date).toISOString().slice(0,10) : '—' %></div>
+      <div><b>طريقة الدفع:</b> <%= payMethodLabels[cert.payment_method] || '—' %></div>
+      <div><b>منشئ المستخلص:</b> <%= creator.name %></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">ملخص القيم المالية</h3>
+    <div class="dash-grid">
+      <div class="dash-card"><div class="dash-num mono"><%= Number(order.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></div><div class="dash-label">إجمالي أمر التعميد</div></div>
+      <div class="dash-card"><div class="dash-num mono"><%= spent.toLocaleString('en-US',{minimumFractionDigits:2}) %></div><div class="dash-label">إجمالي المستخلصات المحتسبة سابقًا</div></div>
+      <div class="dash-card"><div class="dash-num mono" style="color:var(--amber-dark);"><%= Number(cert.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></div><div class="dash-label">قيمة هذا المستخلص</div></div>
+      <div class="dash-card"><div class="dash-num mono" style="color:<%= remaining < 0 ? 'var(--bad)' : 'var(--good)' %>;"><%= remaining.toLocaleString('en-US',{minimumFractionDigits:2}) %></div><div class="dash-label">المتبقي من أمر التعميد</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">جدول دفعات المستخلص</h3>
+    <table>
+      <thead><tr><th>#</th><th>الوصف</th><th>المبلغ</th></tr></thead>
+      <tbody>
+        <% items.forEach((it,i) => { %>
+        <tr><td><%= i+1 %></td><td style="text-align:right;"><%= it.description %></td><td class="mono"><%= Number(it.amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div style="text-align:left; font-weight:700; margin-top:10px; line-height:2;">
+      الإجمالي: <span class="mono"><%= Number(cert.subtotal).toLocaleString('en-US',{minimumFractionDigits:2}) %></span><br>
+      الخصم: <span class="mono"><%= Number(cert.discount).toLocaleString('en-US',{minimumFractionDigits:2}) %></span><br>
+      الإجمالي بعد الخصم: <span class="mono"><%= Number(cert.after_discount).toLocaleString('en-US',{minimumFractionDigits:2}) %></span><br>
+      الضريبة (<%= cert.vat_rate %>%): <span class="mono"><%= Number(cert.vat_amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></span><br>
+      الإجمالي النهائي: <span class="mono" style="font-size:16px;"><%= Number(cert.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></span>
+    </div>
+  </div>
+
+  <% if (cert.notes) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">ملاحظات</h3>
+    <p style="white-space:pre-wrap; margin:0;"><%= cert.notes %></p>
+  </div>
+  <% } %>
+
+  <% if (cert.status === 'pending_review' && canApprove) { %>
+  <div class="card no-print" style="display:flex; gap:10px; justify-content:center; padding:22px;">
+    <form method="POST" action="/certificates/<%= cert.id %>/approve" onsubmit="return confirm('سيتم تسجيل اعتمادك على هذا المستخلص. متابعة؟');" style="margin:0;">
+      <button type="submit" class="btn btn-good" style="padding:12px 28px;">✓ اعتماد</button>
+    </form>
+    <button type="button" class="btn btn-bad" style="padding:12px 28px;" onclick="openModal('reject-modal')">✕ رفض</button>
+    <button type="button" class="btn btn-ghost" style="padding:12px 28px;" onclick="openModal('return-modal')">↺ إعادة للتعديل</button>
+  </div>
+  <% } %>
+
+  <% if (cert.status === 'approved' && canTransferFinancial) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">تحويل للمحاسبة</h3>
+    <form method="POST" action="/certificates/<%= cert.id %>/transfer">
+      <button type="submit" class="btn btn-primary">تحويل للمحاسبة</button>
+    </form>
+  </div>
+  <% } %>
+  <% if (cert.status === 'transferred' && canTransferFinancial) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">تسجيل الصرف</h3>
+    <form method="POST" action="/certificates/<%= cert.id %>/pay">
+      <button type="submit" class="btn btn-primary">تأكيد الصرف</button>
+    </form>
+  </div>
+  <% } %>
+
+  <% if (cert.status === 'approved') { %>
+  <div class="stamp-box">
+    <h4>✓ تم الاعتماد إلكترونيًا</h4>
+    <div class="s-line"><b>اسم المعتمد:</b> <%= cert.final_approved_by_name %></div>
+    <% if (cert.final_approved_by_title) { %><div class="s-line"><b>المسمى الوظيفي:</b> <%= cert.final_approved_by_title %></div><% } %>
+    <div class="s-line"><b>التاريخ والوقت:</b> <%= new Date(cert.final_approved_at).toLocaleString('ar-SA') %></div>
+  </div>
+  <% } %>
+
+  <% if (audit.length > 0) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">سجل عمليات هذا المستخلص</h3>
+    <ul class="audit-list">
+      <% audit.forEach(a => { %>
+      <li>
+        <div class="a-action"><%= a.action %></div>
+        <div class="a-meta">بواسطة: <%= a.actor_name %> — <%= new Date(a.created_at).toLocaleString('ar-SA') %></div>
+        <% if (a.details) { %><div class="a-details"><%= a.details %></div><% } %>
+      </li>
+      <% }) %>
+    </ul>
+  </div>
+  <% } %>
+</div>
+
+<!-- نافذة الرفض -->
+<div class="modal-overlay" id="reject-modal">
+  <div class="modal-box">
+    <h3>سبب الرفض</h3>
+    <form method="POST" action="/certificates/<%= cert.id %>/reject">
+      <textarea name="reason" required placeholder="اكتب سبب رفض هذا المستخلص..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('reject-modal')">إلغاء</button>
+        <button type="submit" class="btn btn-bad">تأكيد الرفض</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- نافذة الإعادة للتعديل -->
+<div class="modal-overlay" id="return-modal">
+  <div class="modal-box">
+    <h3>ملاحظة الإعادة للتعديل</h3>
+    <form method="POST" action="/certificates/<%= cert.id %>/return">
+      <textarea name="note" required placeholder="وضّح ما المطلوب تعديله..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('return-modal')">إلغاء</button>
+        <button type="submit" class="btn btn-primary">تأكيد الإعادة للتعديل</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+</script>
+</body>
+</html>
