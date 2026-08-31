@@ -32,6 +32,7 @@
     <a href="/projects/<%= project.id %>?tab=rejected" class="tab-link <%= tab==='rejected'?'active':'' %>">المرفوضة</a>
     <a href="/projects/<%= project.id %>?tab=files" class="tab-link <%= tab==='files'?'active':'' %>">الملفات والمرفقات</a>
     <a href="/projects/<%= project.id %>?tab=activity" class="tab-link <%= tab==='activity'?'active':'' %>">سجل النشاط</a>
+    <a href="/projects/<%= project.id %>?tab=certificates" class="tab-link <%= tab==='certificates'?'active':'' %>">المستخلصات</a>
   </div>
 
   <% if (tab === 'overview') { %>
@@ -162,6 +163,46 @@
         </li>
         <% }) %>
       </ul>
+      <% } %>
+    </div>
+  <% } %>
+
+  <% if (tab === 'certificates') { %>
+    <div class="card">
+      <form method="GET" action="/projects/<%= project.id %>" class="filter-bar">
+        <input type="hidden" name="tab" value="certificates">
+        <input type="text" name="cq" placeholder="ابحث برقم المستخلص، رقم الأمر، أو المقاول..." value="<%= q.cq || '' %>">
+        <select name="cstatus">
+          <option value="">كل الحالات</option>
+          <% Object.keys(certStatusLabels).forEach(k => { %>
+            <option value="<%= k %>" <%= q.cstatus===k?'selected':'' %>><%= certStatusLabels[k] %></option>
+          <% }) %>
+        </select>
+        <input type="text" name="ccontractor" placeholder="المقاول" value="<%= q.ccontractor || '' %>">
+        <input type="date" name="cdate_from" value="<%= q.cdate_from || '' %>">
+        <input type="date" name="cdate_to" value="<%= q.cdate_to || '' %>">
+        <button type="submit" class="btn btn-ghost btn-sm">تصفية</button>
+      </form>
+      <% if (certificates.length === 0) { %>
+        <div class="empty-state">لا توجد مستخلصات مطابقة.</div>
+      <% } else { %>
+      <table>
+        <thead><tr><th>رقم المستخلص</th><th>رقم أمر التعميد</th><th>المقاول</th><th>القيمة</th><th>التاريخ</th><th>الحالة</th><th>المبلغ المتبقي من الأمر</th><th></th></tr></thead>
+        <tbody>
+          <% certificates.forEach(c => { %>
+          <tr>
+            <td class="mono"><%= c.cert_no %></td>
+            <td class="mono"><%= c.project_order_no || c.order_no %></td>
+            <td><%= c.contractor_name || '—' %></td>
+            <td class="mono"><%= Number(c.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+            <td class="mono" style="font-size:11px;"><%= c.cert_date ? new Date(c.cert_date).toISOString().slice(0,10) : '—' %></td>
+            <td><span class="badge badge-<%= c.status %>"><%= certStatusLabels[c.status] %></span></td>
+            <td class="mono"><%= Number(c.order_remaining).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+            <td><a href="/certificates/<%= c.id %>" class="btn btn-ghost btn-sm">عرض</a></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
       <% } %>
     </div>
   <% } %>
