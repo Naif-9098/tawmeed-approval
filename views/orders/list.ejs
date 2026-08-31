@@ -2,7 +2,7 @@
 <div class="wrap">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
     <h2 class="page-title" style="margin:0;">أوامر التعميد الخاصة بي</h2>
-    <a href="/orders/new" class="btn btn-primary">+ أمر تعميد جديد</a>
+    <% if (perm.canCreateOrders) { %><a href="/orders/new" class="btn btn-primary">+ أمر تعميد جديد</a><% } %>
   </div>
 
   <div class="card" style="padding:0;">
