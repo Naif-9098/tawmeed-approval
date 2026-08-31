@@ -3,8 +3,9 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const db = require('../db');
-const { requireLogin } = require('../middleware/auth');
+const { requireLogin, requireRole } = require('../middleware/auth');
 const { logAction } = require('../audit');
+const { canAccessProject } = require('../projectAccess');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -15,7 +16,11 @@ const STATUS_LABELS = {
 };
 
 async function getOrderFull(orderId) {
-  const orderRes = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+  const orderRes = await db.query(
+    `SELECT o.*, p.name AS project_name_rel, p.code AS project_code
+     FROM orders o LEFT JOIN projects p ON p.id = o.project_id WHERE o.id = $1`,
+    [orderId]
+  );
   const order = orderRes.rows[0];
   if (!order) return null;
   const items = (await db.query('SELECT * FROM order_items WHERE order_id = $1 ORDER BY seq', [orderId])).rows;
@@ -23,7 +28,10 @@ async function getOrderFull(orderId) {
   const steps = (await db.query('SELECT * FROM order_approval_steps WHERE order_id = $1 ORDER BY level_number', [orderId])).rows;
   const audit = (await db.query('SELECT * FROM audit_log WHERE order_id = $1 ORDER BY created_at ASC', [orderId])).rows;
   const creator = (await db.query('SELECT name, job_title FROM users WHERE id = $1', [order.created_by])).rows[0];
-  return { order, items, payments, steps, audit, creator };
+  const assignedApprover = order.assigned_approver_id
+    ? (await db.query('SELECT id, name FROM users WHERE id = $1', [order.assigned_approver_id])).rows[0]
+    : null;
+  return { order, items, payments, steps, audit, creator, assignedApprover };
 }
 
 function canEdit(order, user) {
@@ -34,21 +42,30 @@ function canEdit(order, user) {
 
 router.use(requireLogin);
 
-/* -------- قائمة الأوامر -------- */
+/* -------- قائمة الأوامر (أوامري) -------- */
 router.get('/', async (req, res) => {
   const user = req.session.user;
   let rows;
   if (user.role === 'admin') {
-    rows = (await db.query('SELECT o.*, u.name AS creator_name FROM orders o JOIN users u ON u.id = o.created_by ORDER BY o.created_at DESC')).rows;
+    rows = (await db.query(
+      `SELECT o.*, u.name AS creator_name, p.name AS project_name_rel, p.code AS project_code
+       FROM orders o JOIN users u ON u.id = o.created_by LEFT JOIN projects p ON p.id = o.project_id
+       ORDER BY o.created_at DESC`
+    )).rows;
   } else {
-    rows = (await db.query('SELECT o.*, u.name AS creator_name FROM orders o JOIN users u ON u.id = o.created_by WHERE o.created_by = $1 ORDER BY o.created_at DESC', [user.id])).rows;
+    rows = (await db.query(
+      `SELECT o.*, u.name AS creator_name, p.name AS project_name_rel, p.code AS project_code
+       FROM orders o JOIN users u ON u.id = o.created_by LEFT JOIN projects p ON p.id = o.project_id
+       WHERE o.created_by = $1 ORDER BY o.created_at DESC`,
+      [user.id]
+    )).rows;
   }
   res.render('orders/list', { orders: rows, statusLabels: STATUS_LABELS });
 });
 
-/* -------- إنشاء أمر جديد -------- */
+/* -------- إنشاء أمر جديد (مستقل، بدون مشروع — للتوافق القديم) -------- */
 router.get('/new', (req, res) => {
-  res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null });
+  res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null, project: null });
 });
 
 router.post('/new', async (req, res) => {
@@ -57,24 +74,52 @@ router.post('/new', async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+
+    let projectId = null;
+    let projectOrderNo = null;
+    let projectNameForOrder = b.project_name;
+    let assignedApproverId = null;
+
+    if (b.project_id) {
+      projectId = parseInt(b.project_id, 10);
+      const projRes = await client.query('SELECT * FROM projects WHERE id = $1 FOR UPDATE', [projectId]);
+      const project = projRes.rows[0];
+      if (!project) throw Object.assign(new Error('project not found'), { code: 'PROJECT_NOT_FOUND' });
+      if (project.status === 'archived') throw Object.assign(new Error('project archived'), { code: 'PROJECT_ARCHIVED' });
+      if (!(await canAccessProject(user, projectId))) throw Object.assign(new Error('no access'), { code: 'NO_ACCESS' });
+
+      const nextSeq = project.last_order_seq + 1;
+      await client.query('UPDATE projects SET last_order_seq = $1, updated_at = now() WHERE id = $2', [nextSeq, projectId]);
+      projectOrderNo = `${project.code}-${String(nextSeq).padStart(3, '0')}`;
+      projectNameForOrder = project.name;
+      assignedApproverId = project.responsible_approver_id || null;
+    }
+
     const orderNo = 'Z-' + Date.now().toString().slice(-8);
     const publicToken = uuidv4();
     const orderRes = await client.query(
-      `INSERT INTO orders (order_no, public_token, status, scope, code, project_name, phone, project_manager,
-        contractor_name, order_date, obligations_text, vat_rate, created_by)
-       VALUES ($1,$2,'draft',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-      [orderNo, publicToken, b.scope, b.code, b.project_name, b.phone, b.project_manager,
-       b.contractor_name, b.order_date || null, b.obligations_text, b.vat_rate || 15, user.id]
+      `INSERT INTO orders (order_no, project_id, project_order_no, assigned_approver_id, public_token, status,
+        scope, code, project_name, phone, project_manager, contractor_name, order_date, obligations_text, vat_rate, created_by)
+       VALUES ($1,$2,$3,$4,$5,'draft',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+      [orderNo, projectId, projectOrderNo, assignedApproverId, publicToken, b.scope, b.code, projectNameForOrder,
+       b.phone, b.project_manager, b.contractor_name, b.order_date || null, b.obligations_text, b.vat_rate || 15, user.id]
     );
     const orderId = orderRes.rows[0].id;
     await saveItemsAndPayments(client, orderId, b);
     await client.query('COMMIT');
-    await logAction({ orderId, action: 'تم إنشاء الأمر', actorId: user.id, actorName: user.name });
+    await logAction({
+      orderId, action: 'تم إنشاء الأمر', actorId: user.id, actorName: user.name,
+      details: projectId ? `ضمن المشروع: ${projectNameForOrder} (${projectOrderNo})` : null,
+    });
     res.redirect(`/orders/${orderId}`);
   } catch (e) {
     await client.query('ROLLBACK');
     console.error(e);
-    res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: 'حدث خطأ أثناء الحفظ.' });
+    let msg = 'حدث خطأ أثناء الحفظ.';
+    if (e.code === 'PROJECT_NOT_FOUND') msg = 'المشروع المحدد غير موجود.';
+    if (e.code === 'PROJECT_ARCHIVED') msg = 'لا يمكن إنشاء أوامر داخل مشروع مؤرشف.';
+    if (e.code === 'NO_ACCESS') msg = 'ليست لديك صلاحية الوصول لهذا المشروع.';
+    res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: msg, project: null });
   } finally {
     client.release();
   }
@@ -130,8 +175,14 @@ router.get('/:id', async (req, res) => {
   if (data.order.created_by !== user.id && user.role !== 'admin') {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك عرض هذا الأمر.' });
   }
+  let allProjects = [];
+  let approversList = [];
+  if (user.role === 'admin') {
+    allProjects = (await db.query(`SELECT id, name, code FROM projects WHERE status != 'archived' ORDER BY name`)).rows;
+    approversList = (await db.query(`SELECT id, name FROM users WHERE role IN ('approver','admin') AND active = true ORDER BY name`)).rows;
+  }
   res.render('orders/view', {
-    ...data, statusLabels: STATUS_LABELS, canEdit: canEdit(data.order, user),
+    ...data, statusLabels: STATUS_LABELS, canEdit: canEdit(data.order, user), allProjects, approversList,
   });
 });
 
@@ -142,7 +193,10 @@ router.get('/:id/edit', async (req, res) => {
   if (!canEdit(data.order, user)) {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكن تعديل هذا الأمر في حالته الحالية.' });
   }
-  res.render('orders/form', { order: data.order, items: data.items, payments: data.payments, mode: 'edit', error: null });
+  const project = data.order.project_id
+    ? (await db.query('SELECT * FROM projects WHERE id = $1', [data.order.project_id])).rows[0]
+    : null;
+  res.render('orders/form', { order: data.order, items: data.items, payments: data.payments, mode: 'edit', error: null, project });
 });
 
 router.post('/:id/edit', async (req, res) => {
@@ -157,10 +211,11 @@ router.post('/:id/edit', async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+    const projectNameForOrder = order.project_id ? order.project_name : b.project_name;
     await client.query(
       `UPDATE orders SET scope=$1, code=$2, project_name=$3, phone=$4, project_manager=$5,
         contractor_name=$6, order_date=$7, obligations_text=$8, updated_at=now() WHERE id=$9`,
-      [b.scope, b.code, b.project_name, b.phone, b.project_manager, b.contractor_name,
+      [b.scope, b.code, projectNameForOrder, b.phone, b.project_manager, b.contractor_name,
        b.order_date || null, b.obligations_text, orderId]
     );
     await saveItemsAndPayments(client, orderId, b);
@@ -197,7 +252,6 @@ router.post('/:id/submit', async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
-    // إعادة تهيئة خطوات الاعتماد من مستوى 1 (يشمل حالة إعادة الإرسال بعد "معاد للتعديل")
     await client.query('DELETE FROM order_approval_steps WHERE order_id = $1', [orderId]);
     for (const lvl of levels) {
       await client.query(
@@ -220,6 +274,60 @@ router.post('/:id/submit', async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+/* -------- نقل أمر لمشروع آخر (مدير النظام فقط) -------- */
+router.post('/:id/move', requireRole('admin'), async (req, res) => {
+  const user = req.session.user;
+  const orderId = req.params.id;
+  const newProjectId = parseInt(req.body.project_id, 10);
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const orderRes = await client.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+    const order = orderRes.rows[0];
+    if (!order) throw new Error('order not found');
+    const projRes = await client.query('SELECT * FROM projects WHERE id = $1 FOR UPDATE', [newProjectId]);
+    const project = projRes.rows[0];
+    if (!project) throw new Error('project not found');
+    const oldLabel = order.project_order_no || order.order_no;
+    const nextSeq = project.last_order_seq + 1;
+    await client.query('UPDATE projects SET last_order_seq = $1, updated_at = now() WHERE id = $2', [nextSeq, newProjectId]);
+    const newOrderNo = `${project.code}-${String(nextSeq).padStart(3, '0')}`;
+    await client.query(
+      `UPDATE orders SET project_id=$1, project_order_no=$2, project_name=$3, updated_at=now() WHERE id=$4`,
+      [newProjectId, newOrderNo, project.name, orderId]
+    );
+    await client.query('COMMIT');
+    await logAction({
+      orderId, action: 'تم نقل الأمر لمشروع آخر', actorId: user.id, actorName: user.name,
+      details: `من: ${oldLabel} — إلى مشروع: ${project.name} (${project.code}) — الرقم الجديد: ${newOrderNo}`,
+    });
+    res.redirect(`/orders/${orderId}`);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(400).render('error', { title: 'خطأ', message: 'تعذر نقل الأمر إلى المشروع المحدد.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* -------- تعيين / تغيير المعتمد المسؤول عن أمر معين (مدير النظام فقط) -------- */
+router.post('/:id/assign-approver', requireRole('admin'), async (req, res) => {
+  const user = req.session.user;
+  const approverId = req.body.approver_id || null;
+  await db.query('UPDATE orders SET assigned_approver_id = $1, updated_at = now() WHERE id = $2', [approverId, req.params.id]);
+  let approverName = 'بدون تحديد';
+  if (approverId) {
+    const r = await db.query('SELECT name FROM users WHERE id = $1', [approverId]);
+    if (r.rows[0]) approverName = r.rows[0].name;
+  }
+  await logAction({
+    orderId: req.params.id, action: 'تعيين المعتمد المسؤول عن الأمر', actorId: user.id, actorName: user.name,
+    details: `المعتمد: ${approverName}`,
+  });
+  res.redirect(`/orders/${req.params.id}`);
 });
 
 /* -------- عرض قابل للطباعة / تصدير PDF عبر المتصفح -------- */
