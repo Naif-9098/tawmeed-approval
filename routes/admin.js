@@ -41,16 +41,29 @@ router.post('/users/:id/toggle', async (req, res) => {
   res.redirect('/admin/users');
 });
 
-/* -------- جميع أوامر التعميد -------- */
+/* -------- جميع أوامر التعميد (من جميع المشاريع) -------- */
 router.get('/orders', async (req, res) => {
   const STATUS_LABELS = {
     draft: 'مسودة', pending_approval: 'بانتظار الاعتماد', approved: 'معتمد',
     rejected: 'مرفوض', returned_for_edit: 'معاد للتعديل',
   };
+  const params = [];
+  let filter = '';
+  if (req.query.project_id) { params.push(req.query.project_id); filter += ` AND o.project_id = $${params.length}`; }
+  if (req.query.status) { params.push(req.query.status); filter += ` AND o.status = $${params.length}`; }
+  if (req.query.q) {
+    params.push(`%${req.query.q}%`);
+    filter += ` AND (o.scope ILIKE $${params.length} OR o.order_no ILIKE $${params.length} OR o.project_order_no ILIKE $${params.length} OR o.contractor_name ILIKE $${params.length})`;
+  }
   const rows = (await db.query(
-    `SELECT o.*, u.name AS creator_name FROM orders o JOIN users u ON u.id=o.created_by ORDER BY o.created_at DESC`
+    `SELECT o.*, u.name AS creator_name, p.name AS project_name_rel, p.code AS project_code
+     FROM orders o JOIN users u ON u.id = o.created_by LEFT JOIN projects p ON p.id = o.project_id
+     WHERE 1=1 ${filter}
+     ORDER BY o.created_at DESC`,
+    params
   )).rows;
-  res.render('admin/orders', { orders: rows, statusLabels: STATUS_LABELS });
+  const projects = (await db.query('SELECT id, name, code FROM projects ORDER BY name')).rows;
+  res.render('admin/orders', { orders: rows, statusLabels: STATUS_LABELS, projects, q: req.query });
 });
 
 /* -------- سجل العمليات — للعرض فقط، لا يوجد أي مسار للتعديل أو الحذف -------- */
