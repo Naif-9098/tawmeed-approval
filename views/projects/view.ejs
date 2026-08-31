@@ -80,7 +80,7 @@
 
   <% if (['orders','pending','approved','rejected'].includes(tab)) { %>
     <div class="card">
-      <% if (project.status !== 'archived') { %>
+      <% if (project.status !== 'archived' && canCreateHere) { %>
       <div style="margin-bottom:14px;">
         <a href="/projects/<%= project.id %>/orders/new" class="btn btn-primary">+ إنشاء أمر تعميد</a>
       </div>
