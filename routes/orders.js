@@ -3,9 +3,10 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const db = require('../db');
-const { requireLogin, requireRole } = require('../middleware/auth');
+const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { canAccessProject } = require('../projectAccess');
+const { isManager, seesAllProjects, ownOrdersOnly, canCreateOrders, canTransferFinancial, canApprove } = require('../permissions');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -31,13 +32,39 @@ async function getOrderFull(orderId) {
   const assignedApprover = order.assigned_approver_id
     ? (await db.query('SELECT id, name FROM users WHERE id = $1', [order.assigned_approver_id])).rows[0]
     : null;
-  return { order, items, payments, steps, audit, creator, assignedApprover };
+  const financial = (await db.query(
+    `SELECT f.*, u.name AS accountant_name FROM financial_records f JOIN users u ON u.id = f.accountant_id
+     WHERE f.order_id = $1 ORDER BY f.transferred_at DESC LIMIT 1`,
+    [orderId]
+  )).rows[0] || null;
+  return { order, items, payments, steps, audit, creator, assignedApprover, financial };
 }
 
+/** من يمكنه عرض هذا الأمر؟ */
+function canViewOrder(user, order) {
+  if (seesAllProjects(user)) return true; // admin, projects_manager, technical_office, accountant
+  if (order.created_by === user.id) return true;
+  // معتمد مسموح له بمراجعة هذا الأمر (مُسنَد إليه تحديدًا، أو غير مُسنَد لأحد بعد)
+  if (canApprove(user) && (!order.assigned_approver_id || order.assigned_approver_id === user.id)) return true;
+  return false;
+}
+
+/** من يمكنه تعديل هذا الأمر (بحسب حالته)؟ */
 function canEdit(order, user) {
   if (!order || !user) return false;
-  if (order.created_by !== user.id && user.role !== 'admin') return false;
-  return order.status === 'draft' || order.status === 'returned_for_edit';
+  if (!(order.status === 'draft' || order.status === 'returned_for_edit')) return false;
+  if (isManager(user)) return true;
+  if (user.role === 'technical_office') return true; // مسموح له بتعديل أي أمر قابل للتعديل
+  return order.created_by === user.id;
+}
+
+/** من يمكنه إرسال هذا الأمر للاعتماد؟ (نفس منطق التعديل تقريبًا) */
+function canSubmit(order, user) {
+  if (!order || !user) return false;
+  if (order.status !== 'draft' && order.status !== 'returned_for_edit') return false;
+  if (isManager(user)) return true;
+  if (user.role === 'technical_office') return true;
+  return order.created_by === user.id;
 }
 
 router.use(requireLogin);
@@ -46,7 +73,7 @@ router.use(requireLogin);
 router.get('/', async (req, res) => {
   const user = req.session.user;
   let rows;
-  if (user.role === 'admin') {
+  if (isManager(user)) {
     rows = (await db.query(
       `SELECT o.*, u.name AS creator_name, p.name AS project_name_rel, p.code AS project_code
        FROM orders o JOIN users u ON u.id = o.created_by LEFT JOIN projects p ON p.id = o.project_id
@@ -64,11 +91,11 @@ router.get('/', async (req, res) => {
 });
 
 /* -------- إنشاء أمر جديد (مستقل، بدون مشروع — للتوافق القديم) -------- */
-router.get('/new', (req, res) => {
+router.get('/new', requirePermission(canCreateOrders), (req, res) => {
   res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null, project: null });
 });
 
-router.post('/new', async (req, res) => {
+router.post('/new', requirePermission(canCreateOrders), async (req, res) => {
   const user = req.session.user;
   const b = req.body;
   const client = await db.pool.connect();
@@ -172,17 +199,18 @@ router.get('/:id', async (req, res) => {
   const data = await getOrderFull(req.params.id);
   if (!data) return res.status(404).render('error', { title: 'غير موجود', message: 'أمر التعميد غير موجود.' });
   const user = req.session.user;
-  if (data.order.created_by !== user.id && user.role !== 'admin') {
+  if (!canViewOrder(user, data.order)) {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك عرض هذا الأمر.' });
   }
   let allProjects = [];
   let approversList = [];
-  if (user.role === 'admin') {
+  if (isManager(user)) {
     allProjects = (await db.query(`SELECT id, name, code FROM projects WHERE status != 'archived' ORDER BY name`)).rows;
-    approversList = (await db.query(`SELECT id, name FROM users WHERE role IN ('approver','admin') AND active = true ORDER BY name`)).rows;
+    approversList = (await db.query(`SELECT id, name FROM users WHERE can_approve = true AND active = true ORDER BY name`)).rows;
   }
   res.render('orders/view', {
     ...data, statusLabels: STATUS_LABELS, canEdit: canEdit(data.order, user), allProjects, approversList,
+    canTransferFinancial: canTransferFinancial(user), isManager: isManager(user),
   });
 });
 
@@ -237,16 +265,13 @@ router.post('/:id/submit', async (req, res) => {
   const user = req.session.user;
   const orderRes = await db.query('SELECT * FROM orders WHERE id=$1', [orderId]);
   const order = orderRes.rows[0];
-  if (!order || (order.created_by !== user.id && user.role !== 'admin')) {
-    return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك إرسال هذا الأمر.' });
-  }
-  if (order.status !== 'draft' && order.status !== 'returned_for_edit') {
-    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن إرسال هذا الأمر في حالته الحالية.' });
+  if (!order || !canSubmit(order, user)) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك إرسال هذا الأمر في حالته الحالية.' });
   }
 
   const levels = (await db.query('SELECT * FROM approval_levels_config WHERE active = true ORDER BY level_number')).rows;
   if (levels.length === 0) {
-    return res.status(400).render('error', { title: 'خطأ إعداد', message: 'لا يوجد مستوى اعتماد مُفعّل في إعدادات النظام. تواصل مع مدير النظام.' });
+    return res.status(400).render('error', { title: 'خطأ إعداد', message: 'لا يوجد مستوى اعتماد مُفعّل في إعدادات النظام. تواصل مع مدير المشاريع.' });
   }
 
   const client = await db.pool.connect();
@@ -276,8 +301,8 @@ router.post('/:id/submit', async (req, res) => {
   }
 });
 
-/* -------- نقل أمر لمشروع آخر (مدير النظام فقط) -------- */
-router.post('/:id/move', requireRole('admin'), async (req, res) => {
+/* -------- نقل أمر لمشروع آخر (مدير المشاريع فقط) -------- */
+router.post('/:id/move', requirePermission(isManager), async (req, res) => {
   const user = req.session.user;
   const orderId = req.params.id;
   const newProjectId = parseInt(req.body.project_id, 10);
@@ -313,8 +338,8 @@ router.post('/:id/move', requireRole('admin'), async (req, res) => {
   }
 });
 
-/* -------- تعيين / تغيير المعتمد المسؤول عن أمر معين (مدير النظام فقط) -------- */
-router.post('/:id/assign-approver', requireRole('admin'), async (req, res) => {
+/* -------- تعيين / تغيير المعتمد المسؤول عن أمر معين (مدير المشاريع فقط) -------- */
+router.post('/:id/assign-approver', requirePermission(isManager), async (req, res) => {
   const user = req.session.user;
   const approverId = req.body.approver_id || null;
   await db.query('UPDATE orders SET assigned_approver_id = $1, updated_at = now() WHERE id = $2', [approverId, req.params.id]);
@@ -330,12 +355,32 @@ router.post('/:id/assign-approver', requireRole('admin'), async (req, res) => {
   res.redirect(`/orders/${req.params.id}`);
 });
 
+/* -------- تحويل للمحاسبة / الصرف (المحاسب فقط، وفقط لأمر معتمد) -------- */
+router.post('/:id/transfer', requirePermission(canTransferFinancial), async (req, res) => {
+  const user = req.session.user;
+  const orderId = req.params.id;
+  const order = (await db.query('SELECT * FROM orders WHERE id=$1', [orderId])).rows[0];
+  if (!order) return res.status(404).render('error', { title: 'غير موجود', message: 'أمر التعميد غير موجود.' });
+  if (order.status !== 'approved') {
+    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن التحويل للمحاسبة إلا لأمر معتمد.' });
+  }
+  await db.query(
+    `INSERT INTO financial_records (order_id, accountant_id, notes, status) VALUES ($1,$2,$3,'transferred')`,
+    [orderId, user.id, req.body.notes || null]
+  );
+  await logAction({
+    orderId, action: 'تم التحويل للمحاسبة / الصرف', actorId: user.id, actorName: user.name,
+    details: req.body.notes ? `ملاحظات: ${req.body.notes}` : null,
+  });
+  res.redirect(`/orders/${orderId}`);
+});
+
 /* -------- عرض قابل للطباعة / تصدير PDF عبر المتصفح -------- */
 router.get('/:id/print', async (req, res) => {
   const data = await getOrderFull(req.params.id);
   if (!data) return res.status(404).render('error', { title: 'غير موجود', message: 'أمر التعميد غير موجود.' });
   const user = req.session.user;
-  if (data.order.created_by !== user.id && user.role !== 'admin' && user.role !== 'approver') {
+  if (!canViewOrder(user, data.order)) {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك عرض هذا الأمر.' });
   }
   let qrDataUrl = null;
