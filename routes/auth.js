@@ -1,28 +1,44 @@
-function requireLogin(req, res, next) {
-  if (!req.session.user) {
-    return res.redirect('/login');
-  }
-  next();
-}
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const db = require('../db');
+const { logAction } = require('../audit');
 
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.session.user) return res.redirect('/login');
-    if (!roles.includes(req.session.user.role)) {
-      return res.status(403).render('error', {
-        title: 'غير مصرح',
-        message: 'ليست لديك الصلاحية للوصول إلى هذه الصفحة.',
-        user: req.session.user,
-      });
+router.get('/login', (req, res) => {
+  if (req.session.user) return res.redirect('/orders');
+  res.render('login', { error: null });
+});
+
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await db.query('SELECT * FROM users WHERE email = $1 AND active = true', [email]);
+    const user = result.rows[0];
+    if (!user) {
+      return res.render('login', { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
     }
-    next();
-  };
-}
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.render('login', { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
+    }
+    req.session.user = {
+      id: user.id, name: user.name, email: user.email,
+      role: user.role, jobTitle: user.job_title,
+    };
+    await logAction({ action: 'تسجيل دخول', actorId: user.id, actorName: user.name });
+    res.redirect('/orders');
+  } catch (e) {
+    console.error(e);
+    res.render('login', { error: 'تعذر الاتصال بقاعدة البيانات. حاول لاحقًا.' });
+  }
+});
 
-// يجعل بيانات المستخدم متاحة تلقائيًا لكل القوالب (views) دون تمريرها يدويًا في كل مرة
-function injectUser(req, res, next) {
-  res.locals.currentUser = req.session.user || null;
-  next();
-}
+router.post('/logout', (req, res) => {
+  const user = req.session.user;
+  req.session.destroy(() => {
+    res.redirect('/login');
+  });
+  if (user) logAction({ action: 'تسجيل خروج', actorId: user.id, actorName: user.name }).catch(() => {});
+});
 
-module.exports = { requireLogin, requireRole, injectUser };
+module.exports = router;
