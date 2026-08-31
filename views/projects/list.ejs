@@ -3,7 +3,7 @@
   <%- include('../partials/breadcrumbs', { crumbs: [{ label: 'المشاريع' }] }) %>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
     <h2 class="page-title" style="margin:0;">المشاريع</h2>
-    <% if (currentUser.role === 'admin') { %>
+    <% if (perm.canManageProjects) { %>
       <a href="/projects/new" class="btn btn-primary">+ مشروع جديد</a>
     <% } %>
   </div>
