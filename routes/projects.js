@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireLogin, requireRole } = require('../middleware/auth');
+const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { getAccessibleProjectIds, canAccessProject } = require('../projectAccess');
+const { isManager, ownOrdersOnly, canManageProjects } = require('../permissions');
 
 const PROJECT_STATUS_LABELS = {
   active: 'نشط', stopped: 'متوقف', completed: 'مكتمل', archived: 'مؤرشف',
@@ -17,7 +18,7 @@ router.use(requireLogin);
 
 async function approversList() {
   return (await db.query(
-    `SELECT id, name FROM users WHERE role IN ('approver','admin') AND active = true ORDER BY name`
+    `SELECT id, name FROM users WHERE (can_approve = true OR role IN ('admin','projects_manager')) AND active = true ORDER BY name`
   )).rows;
 }
 
@@ -43,12 +44,12 @@ router.get('/', async (req, res) => {
   res.render('projects/list', { projects: rows, statusLabels: PROJECT_STATUS_LABELS });
 });
 
-/* -------- إنشاء مشروع (مدير النظام فقط) -------- */
-router.get('/new', requireRole('admin'), async (req, res) => {
+/* -------- إنشاء مشروع (مدير المشاريع فقط) -------- */
+router.get('/new', requirePermission(canManageProjects), async (req, res) => {
   res.render('projects/form', { project: null, mode: 'new', error: null, approvers: await approversList() });
 });
 
-router.post('/new', requireRole('admin'), async (req, res) => {
+router.post('/new', requirePermission(canManageProjects), async (req, res) => {
   const user = req.session.user;
   const b = req.body;
   try {
@@ -70,14 +71,14 @@ router.post('/new', requireRole('admin'), async (req, res) => {
   }
 });
 
-/* -------- تعديل مشروع (مدير النظام فقط) -------- */
-router.get('/:id/edit', requireRole('admin'), async (req, res) => {
+/* -------- تعديل مشروع (مدير المشاريع فقط) -------- */
+router.get('/:id/edit', requirePermission(canManageProjects), async (req, res) => {
   const project = (await db.query('SELECT * FROM projects WHERE id=$1', [req.params.id])).rows[0];
   if (!project) return res.status(404).render('error', { title: 'غير موجود', message: 'المشروع غير موجود.' });
   res.render('projects/form', { project, mode: 'edit', error: null, approvers: await approversList() });
 });
 
-router.post('/:id/edit', requireRole('admin'), async (req, res) => {
+router.post('/:id/edit', requirePermission(canManageProjects), async (req, res) => {
   const user = req.session.user;
   const b = req.body;
   try {
@@ -99,8 +100,8 @@ router.post('/:id/edit', requireRole('admin'), async (req, res) => {
   }
 });
 
-/* -------- أرشفة / إعادة تفعيل (مدير النظام فقط) -------- */
-router.post('/:id/archive', requireRole('admin'), async (req, res) => {
+/* -------- أرشفة / إعادة تفعيل (مدير المشاريع فقط) -------- */
+router.post('/:id/archive', requirePermission(canManageProjects), async (req, res) => {
   const user = req.session.user;
   const project = (await db.query('SELECT * FROM projects WHERE id=$1', [req.params.id])).rows[0];
   await db.query(`UPDATE projects SET status='archived', updated_at=now() WHERE id=$1`, [req.params.id]);
@@ -108,7 +109,7 @@ router.post('/:id/archive', requireRole('admin'), async (req, res) => {
   res.redirect(`/projects/${req.params.id}`);
 });
 
-router.post('/:id/activate', requireRole('admin'), async (req, res) => {
+router.post('/:id/activate', requirePermission(canManageProjects), async (req, res) => {
   const user = req.session.user;
   const project = (await db.query('SELECT * FROM projects WHERE id=$1', [req.params.id])).rows[0];
   await db.query(`UPDATE projects SET status='active', updated_at=now() WHERE id=$1`, [req.params.id]);
@@ -116,8 +117,8 @@ router.post('/:id/activate', requireRole('admin'), async (req, res) => {
   res.redirect(`/projects/${req.params.id}`);
 });
 
-/* -------- إدارة صلاحيات الوصول للمشروع (مدير النظام فقط) -------- */
-router.get('/:id/access', requireRole('admin'), async (req, res) => {
+/* -------- إدارة صلاحيات الوصول للمشروع (مدير المشاريع فقط) -------- */
+router.get('/:id/access', requirePermission(canManageProjects), async (req, res) => {
   const project = (await db.query('SELECT * FROM projects WHERE id=$1', [req.params.id])).rows[0];
   if (!project) return res.status(404).render('error', { title: 'غير موجود', message: 'المشروع غير موجود.' });
   const granted = (await db.query(
@@ -128,7 +129,7 @@ router.get('/:id/access', requireRole('admin'), async (req, res) => {
   res.render('projects/access', { project, granted, allUsers });
 });
 
-router.post('/:id/access/add', requireRole('admin'), async (req, res) => {
+router.post('/:id/access/add', requirePermission(canManageProjects), async (req, res) => {
   const user = req.session.user;
   if (req.body.user_id) {
     await db.query(`INSERT INTO project_access (project_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [req.params.id, req.body.user_id]);
@@ -137,7 +138,7 @@ router.post('/:id/access/add', requireRole('admin'), async (req, res) => {
   res.redirect(`/projects/${req.params.id}/access`);
 });
 
-router.post('/:id/access/:userId/remove', requireRole('admin'), async (req, res) => {
+router.post('/:id/access/:userId/remove', requirePermission(canManageProjects), async (req, res) => {
   const user = req.session.user;
   await db.query(`DELETE FROM project_access WHERE project_id=$1 AND user_id=$2`, [req.params.id, req.params.userId]);
   await logAction({ action: 'إزالة صلاحية وصول لمشروع', actorId: user.id, actorName: user.name, details: `Project ID: ${req.params.id}, User ID: ${req.params.userId}` });
@@ -151,6 +152,9 @@ router.get('/:id/orders/new', async (req, res) => {
   if (!project) return res.status(404).render('error', { title: 'غير موجود', message: 'المشروع غير موجود.' });
   if (!(await canAccessProject(user, project.id))) {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'ليست لديك صلاحية الوصول لهذا المشروع.' });
+  }
+  if (user.role === 'accountant') {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكن للمحاسب إنشاء أوامر تعميد.' });
   }
   if (project.status === 'archived') {
     return res.status(400).render('error', { title: 'مشروع مؤرشف', message: 'لا يمكن إنشاء أوامر جديدة داخل مشروع مؤرشف. أعد تفعيله أولاً من صفحة المشروع.' });
@@ -171,6 +175,10 @@ router.get('/:id', async (req, res) => {
   const tab = ['overview', 'orders', 'pending', 'approved', 'rejected', 'files', 'activity'].includes(req.query.tab)
     ? req.query.tab : 'overview';
 
+  // خصوصية الأوامر: من يجب أن يرى أوامره الخاصة فقط داخل هذا المشروع؟
+  const ownFilterSql = ownOrdersOnly(user) ? ' AND created_by = $2' : '';
+  const ownFilterParams = ownOrdersOnly(user) ? [projectId, user.id] : [projectId];
+
   const stats = (await db.query(`
     SELECT
       COUNT(*) AS order_count,
@@ -178,17 +186,23 @@ router.get('/:id', async (req, res) => {
       COALESCE(SUM(grand_total) FILTER (WHERE status='approved'),0) AS approved_value,
       COALESCE(SUM(grand_total) FILTER (WHERE status='pending_approval'),0) AS pending_value,
       COUNT(*) FILTER (WHERE status='rejected') AS rejected_count
-    FROM orders WHERE project_id = $1
-  `, [projectId])).rows[0];
+    FROM orders WHERE project_id = $1 ${ownFilterSql}
+  `, ownFilterParams)).rows[0];
 
   const recentOrders = (await db.query(`
     SELECT o.*, u.name AS creator_name FROM orders o JOIN users u ON u.id = o.created_by
-    WHERE o.project_id = $1 ORDER BY o.created_at DESC LIMIT 5
-  `, [projectId])).rows;
+    WHERE o.project_id = $1 ${ownOrdersOnly(user) ? 'AND o.created_by = $2' : ''}
+    ORDER BY o.created_at DESC LIMIT 5
+  `, ownFilterParams)).rows;
 
   let orders = [];
   if (['orders', 'pending', 'approved', 'rejected'].includes(tab)) {
     const params = [projectId];
+    let ownershipFilter = '';
+    if (ownOrdersOnly(user)) {
+      params.push(user.id);
+      ownershipFilter = ` AND o.created_by = $${params.length}`;
+    }
     let statusFilter = '';
     if (tab === 'pending') statusFilter = `AND o.status = 'pending_approval'`;
     if (tab === 'approved') statusFilter = `AND o.status = 'approved'`;
@@ -214,7 +228,7 @@ router.get('/:id', async (req, res) => {
       FROM orders o
       JOIN users u ON u.id = o.created_by
       LEFT JOIN users au ON au.id = o.assigned_approver_id
-      WHERE o.project_id = $1 ${statusFilter} ${searchFilter} ${extraFilter}
+      WHERE o.project_id = $1 ${ownershipFilter} ${statusFilter} ${searchFilter} ${extraFilter}
       ORDER BY o.created_at DESC
     `, params)).rows;
   }
@@ -223,14 +237,14 @@ router.get('/:id', async (req, res) => {
   if (tab === 'activity') {
     activity = (await db.query(`
       SELECT a.* FROM audit_log a
-      WHERE a.order_id IN (SELECT id FROM orders WHERE project_id = $1)
+      WHERE a.order_id IN (SELECT id FROM orders WHERE project_id = $1 ${ownFilterSql})
       ORDER BY a.created_at DESC LIMIT 300
-    `, [projectId])).rows;
+    `, ownFilterParams)).rows;
   }
 
   const creators = (await db.query(
-    `SELECT DISTINCT u.id, u.name FROM orders o JOIN users u ON u.id = o.created_by WHERE o.project_id = $1 ORDER BY u.name`,
-    [projectId]
+    `SELECT DISTINCT u.id, u.name FROM orders o JOIN users u ON u.id = o.created_by WHERE o.project_id = $1 ${ownFilterSql} ORDER BY u.name`,
+    ownFilterParams
   )).rows;
 
   res.render('projects/view', {
@@ -238,7 +252,8 @@ router.get('/:id', async (req, res) => {
     approversList: await approversList(),
     statusLabels: PROJECT_STATUS_LABELS, orderStatusLabels: ORDER_STATUS_LABELS,
     q: req.query,
-    canManage: user.role === 'admin',
+    canManage: canManageProjects(user),
+    canCreateHere: user.role !== 'accountant',
   });
 });
 
