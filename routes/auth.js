@@ -23,8 +23,9 @@ router.post('/login', async (req, res) => {
     }
     req.session.user = {
       id: user.id, name: user.name, email: user.email,
-      role: user.role, jobTitle: user.job_title,
+      role: user.role, jobTitle: user.job_title, can_approve: user.can_approve,
     };
+    await db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
     await logAction({ action: 'تسجيل دخول', actorId: user.id, actorName: user.name });
     res.redirect('/orders');
   } catch (e) {
