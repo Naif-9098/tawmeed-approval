@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const { logAction } = require('../audit');
+const { getAccessibleProjectIds, canAccessProject } = require('../projectAccess');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -15,25 +16,41 @@ const STATUS_LABELS = {
 router.use(requireLogin);
 router.use(requireRole('approver', 'admin'));
 
-/* -------- طلبات الاعتماد: كل الأوامر التي تنتظر موافقة المستخدم الحالي -------- */
+/* -------- طلبات الاعتماد: أوامر تنتظر موافقة المستخدم الحالي فقط -------- */
 router.get('/', async (req, res) => {
   const user = req.session.user;
-  // المستوى الحالي للأمر يجب أن يطابق مستوى نشِط يتطلب دور هذا المستخدم
+  const ids = await getAccessibleProjectIds(user); // null = admin بلا قيود
+
+  const params = [user.role, user.id];
+  let projectFilter = '';
+  if (ids !== null) {
+    params.push(ids);
+    projectFilter = ` AND (o.project_id IS NULL OR o.project_id = ANY($${params.length}))`;
+  }
+
   const rows = (await db.query(
-    `SELECT o.*, u.name AS creator_name, s.level_name, s.level_number
+    `SELECT o.*, u.name AS creator_name, s.level_name, s.level_number, p.name AS project_name_rel, p.code AS project_code
      FROM orders o
      JOIN users u ON u.id = o.created_by
      JOIN order_approval_steps s ON s.order_id = o.id AND s.level_number = o.current_level AND s.status='pending'
      JOIN approval_levels_config c ON c.level_number = s.level_number
-     WHERE o.status = 'pending_approval' AND (c.required_role = $1 OR $1 = 'admin')
+     LEFT JOIN projects p ON p.id = o.project_id
+     WHERE o.status = 'pending_approval'
+       AND (c.required_role = $1 OR $1 = 'admin')
+       AND (o.assigned_approver_id IS NULL OR o.assigned_approver_id = $2 OR $1 = 'admin')
+       ${projectFilter}
      ORDER BY o.updated_at ASC`,
-    [user.role]
+    params
   )).rows;
   res.render('approvals/list', { orders: rows });
 });
 
 async function getOrderFull(orderId) {
-  const orderRes = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+  const orderRes = await db.query(
+    `SELECT o.*, p.name AS project_name_rel, p.code AS project_code
+     FROM orders o LEFT JOIN projects p ON p.id = o.project_id WHERE o.id = $1`,
+    [orderId]
+  );
   const order = orderRes.rows[0];
   if (!order) return null;
   const items = (await db.query('SELECT * FROM order_items WHERE order_id = $1 ORDER BY seq', [orderId])).rows;
@@ -43,10 +60,21 @@ async function getOrderFull(orderId) {
   return { order, items, payments, steps, creator };
 }
 
+/** تحقق: هل يُسمح لهذا المستخدم بمراجعة/الرد على هذا الأمر تحديدًا؟ */
+async function checkApproverAllowed(order, user) {
+  if (user.role === 'admin') return true;
+  if (order.assigned_approver_id && order.assigned_approver_id !== user.id) return false;
+  return canAccessProject(user, order.project_id);
+}
+
 /* -------- تفاصيل أمر التعميد لغرض الاعتماد -------- */
 router.get('/:id', async (req, res) => {
   const data = await getOrderFull(req.params.id);
   if (!data) return res.status(404).render('error', { title: 'غير موجود', message: 'أمر التعميد غير موجود.' });
+  const user = req.session.user;
+  if (!(await checkApproverAllowed(data.order, user))) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'هذا الأمر مُسنَد لمعتمد آخر أو خارج نطاق صلاحيتك.' });
+  }
   res.render('approvals/detail', { ...data, statusLabels: STATUS_LABELS });
 });
 
@@ -67,6 +95,9 @@ router.post('/:id/approve', async (req, res) => {
   if (!order || order.status !== 'pending_approval') {
     return res.status(400).render('error', { title: 'غير ممكن', message: 'هذا الأمر لم يعد بانتظار الاعتماد.' });
   }
+  if (!(await checkApproverAllowed(order, user))) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'هذا الأمر مُسنَد لمعتمد آخر أو خارج نطاق صلاحيتك.' });
+  }
   const step = await currentStep(orderId, order);
   if (!step) return res.status(400).render('error', { title: 'خطأ', message: 'تعذر إيجاد خطوة الاعتماد الحالية.' });
 
@@ -84,14 +115,12 @@ router.post('/:id/approve', async (req, res) => {
       [order.current_level]
     );
     if (nextLevelRes.rows.length > 0) {
-      // يوجد مستوى اعتماد تالٍ مُفعّل — ينتقل الأمر إليه
       const next = nextLevelRes.rows[0];
       await client.query(`UPDATE orders SET current_level=$1, updated_at=now() WHERE id=$2`, [next.level_number, orderId]);
       await client.query('COMMIT');
       await logAction({ orderId, action: `تم الاعتماد (مستوى: ${step.level_name})`, actorId: user.id, actorName: user.name,
         details: `انتقل الأمر إلى مستوى الاعتماد التالي: ${next.level_name}` });
     } else {
-      // هذا آخر مستوى — الأمر معتمد نهائيًا
       await client.query(
         `UPDATE orders SET status='approved', final_approved_by=$1, final_approved_by_name=$2,
           final_approved_by_title=$3, final_approved_at=now(), updated_at=now() WHERE id=$4`,
@@ -122,6 +151,9 @@ router.post('/:id/reject', async (req, res) => {
   const order = orderRes.rows[0];
   if (!order || order.status !== 'pending_approval') {
     return res.status(400).render('error', { title: 'غير ممكن', message: 'هذا الأمر لم يعد بانتظار الاعتماد.' });
+  }
+  if (!(await checkApproverAllowed(order, user))) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'هذا الأمر مُسنَد لمعتمد آخر أو خارج نطاق صلاحيتك.' });
   }
   const step = await currentStep(orderId, order);
   const client = await db.pool.connect();
@@ -159,6 +191,9 @@ router.post('/:id/return', async (req, res) => {
   const order = orderRes.rows[0];
   if (!order || order.status !== 'pending_approval') {
     return res.status(400).render('error', { title: 'غير ممكن', message: 'هذا الأمر لم يعد بانتظار الاعتماد.' });
+  }
+  if (!(await checkApproverAllowed(order, user))) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'هذا الأمر مُسنَد لمعتمد آخر أو خارج نطاق صلاحيتك.' });
   }
   const step = await currentStep(orderId, order);
   const client = await db.pool.connect();
