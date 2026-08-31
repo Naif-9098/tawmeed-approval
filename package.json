@@ -7,7 +7,8 @@
     "start": "node server.js",
     "seed": "node seed.js",
     "migrate:projects": "node migrate_projects.js",
-    "migrate:roles": "node migrate_roles.js"
+    "migrate:roles": "node migrate_roles.js",
+    "migrate:certificates": "node migrate_certificates.js"
   },
   "engines": {
     "node": ">=18.0.0"
