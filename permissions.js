@@ -49,6 +49,10 @@ function canTransferFinancial(user) {
   return user.role === 'accountant';
 }
 
+function canCreateCertificates(user) {
+  return user.role !== 'accountant';
+}
+
 function roleLabel(role) {
   return ROLE_LABELS[role] || role;
 }
@@ -56,5 +60,5 @@ function roleLabel(role) {
 module.exports = {
   ROLE_LABELS, isManager, seesAllProjects, ownOrdersOnly,
   canCreateOrders, canManageUsers, canManageProjects, canApprove,
-  canTransferFinancial, roleLabel,
+  canTransferFinancial, canCreateCertificates, roleLabel,
 };
