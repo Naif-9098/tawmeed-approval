@@ -16,10 +16,10 @@
   <div class="nav-links">
     <a href="/projects">المشاريع</a>
     <a href="/orders">أوامري</a>
-    <% if (currentUser.role === 'approver' || currentUser.role === 'admin') { %>
+    <% if (perm.canApprove) { %>
       <a href="/approvals">طلبات الاعتماد</a>
     <% } %>
-    <% if (currentUser.role === 'admin') { %>
+    <% if (perm.isManager) { %>
       <a href="/admin/orders">كل الأوامر</a>
       <a href="/admin/users">المستخدمون</a>
       <a href="/admin/audit-log">سجل العمليات</a>
@@ -27,7 +27,7 @@
     <% } %>
   </div>
   <div class="nav-user">
-    <span><b><%= currentUser.name %></b> · <%= currentUser.role === 'admin' ? 'مدير النظام' : (currentUser.role === 'approver' ? 'معتمد' : 'موظف') %></span>
+    <span><b><%= currentUser.name %></b> · <%= perm.roleLabel %></span>
     <form method="POST" action="/logout" style="margin:0;">
       <button type="submit" class="btn btn-ghost btn-sm" style="color:#fff; border-color:#48597A;">خروج</button>
     </form>
