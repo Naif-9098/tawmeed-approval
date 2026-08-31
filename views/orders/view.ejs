@@ -48,7 +48,7 @@
     </div>
   </div>
 
-  <% if (currentUser.role === 'admin') { %>
+  <% if (perm.isManager) { %>
   <div class="card">
     <h3 style="margin-top:0;">أدوات مدير النظام</h3>
     <div class="form-grid">
@@ -77,6 +77,31 @@
         </form>
       </div>
     </div>
+  </div>
+  <% } %>
+
+  <% if (order.status === 'approved' && (canTransferFinancial || financial || perm.isManager)) { %>
+  <div class="card">
+    <h3 style="margin-top:0;">التحويل للمحاسبة / الصرف</h3>
+    <% if (financial) { %>
+      <div class="stamp-box">
+        <h4>✓ تم التحويل للمحاسبة</h4>
+        <div class="s-line"><b>المحاسب:</b> <%= financial.accountant_name %></div>
+        <div class="s-line"><b>التاريخ والوقت:</b> <%= new Date(financial.transferred_at).toLocaleString('ar-SA') %></div>
+        <div class="s-line"><b>الحالة:</b> <%= financial.status === 'completed' ? 'مكتمل' : 'تم التحويل' %></div>
+        <% if (financial.notes) { %><div class="s-line"><b>ملاحظات:</b> <%= financial.notes %></div><% } %>
+      </div>
+    <% } else if (canTransferFinancial) { %>
+      <form method="POST" action="/orders/<%= order.id %>/transfer">
+        <div class="form-field" style="margin-bottom:10px;">
+          <label>ملاحظات (اختياري)</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">تحويل للمحاسبة / الصرف</button>
+      </form>
+    <% } else { %>
+      <div class="empty-state">لم يُحوَّل بعد — جاهز للتحويل.</div>
+    <% } %>
   </div>
   <% } %>
 
