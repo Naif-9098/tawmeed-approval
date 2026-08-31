@@ -1,0 +1,52 @@
+<%- include('../partials/header', { title: mode === 'new' ? 'مشروع جديد' : 'تعديل المشروع' }) %>
+<div class="wrap">
+  <%- include('../partials/breadcrumbs', { crumbs: [
+    { label: 'المشاريع', url: '/projects' },
+    { label: mode === 'new' ? 'مشروع جديد' : ('تعديل ' + project.name) }
+  ] }) %>
+  <h2 class="page-title"><%= mode === 'new' ? 'مشروع جديد' : 'تعديل المشروع' %></h2>
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <form method="POST" action="<%= mode === 'new' ? '/projects/new' : '/projects/' + project.id + '/edit' %>">
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-field"><label>اسم المشروع</label><input name="name" required value="<%= project ? project.name : '' %>"></div>
+        <div class="form-field"><label>كود المشروع (يُستخدم لترقيم أوامره، مثال: MSF)</label><input name="code" required value="<%= project ? project.code : '' %>" style="text-transform:uppercase;"></div>
+        <div class="form-field"><label>اسم العميل / المالك</label><input name="client_name" value="<%= project ? (project.client_name||'') : '' %>"></div>
+        <div class="form-field"><label>موقع المشروع</label><input name="location" value="<%= project ? (project.location||'') : '' %>"></div>
+        <div class="form-field"><label>مدير المشروع</label><input name="project_manager" value="<%= project ? (project.project_manager||'') : '' %>"></div>
+        <div class="form-field">
+          <label>المعتمد المسؤول (اختياري)</label>
+          <select name="responsible_approver_id">
+            <option value="">— بدون تحديد (يعتمد أي مستخدم بدور معتمد) —</option>
+            <% approvers.forEach(a => { %>
+              <option value="<%= a.id %>" <%= project && project.responsible_approver_id === a.id ? 'selected' : '' %>><%= a.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="form-field"><label>تاريخ البداية</label><input type="date" name="start_date" value="<%= project && project.start_date ? new Date(project.start_date).toISOString().slice(0,10) : '' %>"></div>
+        <div class="form-field"><label>تاريخ النهاية المتوقع</label><input type="date" name="end_date" value="<%= project && project.end_date ? new Date(project.end_date).toISOString().slice(0,10) : '' %>"></div>
+        <div class="form-field">
+          <label>حالة المشروع</label>
+          <select name="status">
+            <option value="active" <%= project && project.status==='active' ? 'selected':'' %>>نشط</option>
+            <option value="stopped" <%= project && project.status==='stopped' ? 'selected':'' %>>متوقف</option>
+            <option value="completed" <%= project && project.status==='completed' ? 'selected':'' %>>مكتمل</option>
+            <option value="archived" <%= project && project.status==='archived' ? 'selected':'' %>>مؤرشف</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-top:14px;">
+        <label>وصف / ملاحظات</label>
+        <textarea name="notes" rows="4"><%= project ? (project.notes||'') : '' %></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="<%= mode === 'new' ? '/projects' : '/projects/' + project.id %>" class="btn btn-ghost">إلغاء</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>
