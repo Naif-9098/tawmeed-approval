@@ -1,0 +1,36 @@
+<%- include('../partials/header', { title: 'أوامر التعميد' }) %>
+<div class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h2 class="page-title" style="margin:0;">أوامر التعميد الخاصة بي</h2>
+    <a href="/orders/new" class="btn btn-primary">+ أمر تعميد جديد</a>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <% if (orders.length === 0) { %>
+      <div class="empty-state">لا توجد أوامر تعميد بعد. ابدأ بإنشاء أمر جديد.</div>
+    <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>رقم الأمر</th><th>المشروع</th><th>المقاول/المورد</th><th>الإجمالي</th><th>الحالة</th><th>آخر تحديث</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% orders.forEach(o => { %>
+        <tr>
+          <td class="mono"><%= o.order_no %></td>
+          <td><%= o.project_name || '—' %></td>
+          <td><%= o.contractor_name || '—' %></td>
+          <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US', {minimumFractionDigits:2}) %></td>
+          <td><span class="badge badge-<%= o.status %>"><%= statusLabels[o.status] %></span></td>
+          <td class="mono" style="font-size:11.5px;"><%= new Date(o.updated_at).toLocaleString('ar-SA') %></td>
+          <td><a href="/orders/<%= o.id %>" class="btn btn-ghost btn-sm">عرض</a></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+</body>
+</html>
