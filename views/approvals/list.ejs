@@ -10,8 +10,8 @@
       <tbody>
         <% orders.forEach(o => { %>
         <tr>
-          <td class="mono"><%= o.order_no %></td>
-          <td><%= o.project_name || '—' %></td>
+          <td class="mono"><%= o.project_order_no || o.order_no %></td>
+          <td><%= o.project_name_rel || o.project_name || '—' %></td>
           <td><%= o.creator_name %></td>
           <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
           <td><%= o.level_name %></td>
