@@ -1,0 +1,48 @@
+<%- include('../partials/header', { title: 'المشاريع المسندة — ' + target.name }) %>
+<div class="wrap">
+  <h2 class="page-title">المشاريع المسندة لـ <%= target.name %></h2>
+  <p style="color:#777; font-size:13px; margin-top:-10px;">
+    <%= target.role === 'site_officer'
+      ? 'مسؤول الموقع يرى فقط المشاريع المضافة هنا — لا يوجد افتراضي مفتوح لهذا الدور.'
+      : 'هذا الدور يرى المشاريع بحسب صلاحياته العامة؛ الإضافة هنا تمنحه وصولًا إضافيًا صريحًا فقط.' %>
+  </p>
+
+  <div class="card">
+    <h3 style="margin-top:0;">إضافة مشروع</h3>
+    <form method="POST" action="/admin/users/<%= target.id %>/projects/add" style="display:flex; gap:10px;">
+      <select name="project_id" style="flex:1;">
+        <% allProjects.forEach(p => { %>
+          <option value="<%= p.id %>"><%= p.name %> (<%= p.code %>)</option>
+        <% }) %>
+      </select>
+      <button type="submit" class="btn btn-primary">+ إضافة</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <% if (granted.length === 0) { %>
+      <div class="empty-state">لا توجد مشاريع مسندة لهذا المستخدم بعد.</div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>المشروع</th><th>الكود</th><th></th></tr></thead>
+      <tbody>
+        <% granted.forEach(p => { %>
+        <tr>
+          <td><%= p.name %></td>
+          <td class="mono"><%= p.code %></td>
+          <td>
+            <form method="POST" action="/admin/users/<%= target.id %>/projects/<%= p.id %>/remove" style="margin:0;">
+              <button type="submit" class="btn btn-ghost btn-sm">إزالة</button>
+            </form>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
+  <a href="/admin/users" class="btn btn-ghost">رجوع لإدارة المستخدمين</a>
+</div>
+</body>
+</html>
