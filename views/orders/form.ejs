@@ -1,17 +1,30 @@
 <%- include('../partials/header', { title: mode === 'new' ? 'أمر تعميد جديد' : 'تعديل أمر التعميد' }) %>
 <div class="wrap">
-  <h2 class="page-title"><%= mode === 'new' ? 'أمر تعميد جديد' : 'تعديل أمر التعميد رقم ' + order.order_no %></h2>
+  <% if (project) { %>
+    <%- include('../partials/breadcrumbs', { crumbs: [
+      { label: 'المشاريع', url: '/projects' },
+      { label: project.name, url: '/projects/' + project.id },
+      { label: mode === 'new' ? 'أمر تعميد جديد' : 'تعديل أمر تعميد' }
+    ] }) %>
+  <% } %>
+  <h2 class="page-title"><%= mode === 'new' ? 'أمر تعميد جديد' : 'تعديل أمر التعميد رقم ' + (order.project_order_no || order.order_no) %></h2>
   <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
   <% if (mode === 'edit' && order.status === 'returned_for_edit') { %>
     <div class="alert alert-error">تمت إعادة هذا الأمر للتعديل من قبل المعتمد. راجع صفحة عرض الأمر لقراءة الملاحظة، ثم عدّل وأعد الإرسال.</div>
   <% } %>
+  <% if (project) { %>
+    <div class="project-banner">هذا الأمر مرتبط بمشروع: <b><%= project.name %></b> (<span class="mono"><%= project.code %></span>) — سيُولَّد له رقم تلقائي ضمن هذا المشروع.</div>
+  <% } %>
 
   <form method="POST" action="<%= mode === 'new' ? '/orders/new' : '/orders/' + order.id + '/edit' %>">
+    <% if (project) { %><input type="hidden" name="project_id" value="<%= project.id %>"><% } %>
     <div class="card">
       <div class="form-grid">
         <div class="form-field"><label>نطاق العمل</label><input name="scope" value="<%= order ? (order.scope||'') : '' %>"></div>
         <div class="form-field"><label>الكود</label><input name="code" value="<%= order ? (order.code||'') : '' %>"></div>
+        <% if (!project) { %>
         <div class="form-field"><label>اسم المشروع</label><input name="project_name" value="<%= order ? (order.project_name||'') : '' %>"></div>
+        <% } %>
         <div class="form-field"><label>مسؤول المشروع</label><input name="project_manager" value="<%= order ? (order.project_manager||'') : '' %>"></div>
         <div class="form-field"><label>رقم التواصل</label><input name="phone" value="<%= order ? (order.phone||'') : '' %>"></div>
         <div class="form-field"><label>المقاول / المورد</label><input name="contractor_name" value="<%= order ? (order.contractor_name||'') : '' %>"></div>
