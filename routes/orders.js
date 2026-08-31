@@ -16,6 +16,16 @@ const STATUS_LABELS = {
   returned_for_edit: 'معاد للتعديل',
 };
 
+const CERT_STATUS_LABELS = {
+  draft: 'مسودة',
+  pending_review: 'بانتظار المراجعة',
+  approved: 'معتمد',
+  rejected: 'مرفوض',
+  returned_for_edit: 'معاد للتعديل',
+  transferred: 'محول للمحاسبة',
+  paid: 'تم الصرف',
+};
+
 async function getOrderFull(orderId) {
   const orderRes = await db.query(
     `SELECT o.*, p.name AS project_name_rel, p.code AS project_code
@@ -208,9 +218,18 @@ router.get('/:id', async (req, res) => {
     allProjects = (await db.query(`SELECT id, name, code FROM projects WHERE status != 'archived' ORDER BY name`)).rows;
     approversList = (await db.query(`SELECT id, name FROM users WHERE can_approve = true AND active = true ORDER BY name`)).rows;
   }
+  const certificates = (await db.query(
+    `SELECT * FROM payment_certificates WHERE order_id = $1 ORDER BY cert_seq`, [data.order.id]
+  )).rows;
+  const certsSpent = certificates
+    .filter(c => ['approved', 'transferred', 'paid'].includes(c.status))
+    .reduce((sum, c) => sum + Number(c.grand_total), 0);
+  const certsRemaining = Number(data.order.grand_total) - certsSpent;
   res.render('orders/view', {
     ...data, statusLabels: STATUS_LABELS, canEdit: canEdit(data.order, user), allProjects, approversList,
     canTransferFinancial: canTransferFinancial(user), isManager: isManager(user),
+    certificates, certsSpent, certsRemaining,
+    certStatusLabels: CERT_STATUS_LABELS, canCreateCert: canViewOrder(user, data.order) && user.role !== 'accountant',
   });
 });
 
