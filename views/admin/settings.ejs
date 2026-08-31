@@ -43,6 +43,17 @@
       </tbody>
     </table>
   </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">نسبة الضريبة الافتراضية للمستخلصات الجديدة</h3>
+    <form method="POST" action="/admin/settings/cert-vat" style="display:flex; gap:10px; align-items:end;">
+      <div class="form-field" style="max-width:160px;">
+        <label>النسبة %</label>
+        <input type="number" step="any" name="default_cert_vat_rate" value="<%= defaultCertVat %>">
+      </div>
+      <button type="submit" class="btn btn-primary">حفظ</button>
+    </form>
+  </div>
 </div>
 </body>
 </html>
