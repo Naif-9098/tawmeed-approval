@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireLogin, requireRole } = require('../middleware/auth');
+const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { getAccessibleProjectIds, canAccessProject } = require('../projectAccess');
+const { isManager, canApprove } = require('../permissions');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -14,18 +15,25 @@ const STATUS_LABELS = {
 };
 
 router.use(requireLogin);
-router.use(requireRole('approver', 'admin'));
+// الدخول لقسم الاعتماد بالكامل يتطلب صلاحية الاعتماد (Permission)،
+// وهي منفصلة عن الدور الوظيفي — مدير المشاريع يدخلها دائمًا أيضًا.
+router.use(requirePermission(canApprove));
 
 /* -------- طلبات الاعتماد: أوامر تنتظر موافقة المستخدم الحالي فقط -------- */
 router.get('/', async (req, res) => {
   const user = req.session.user;
-  const ids = await getAccessibleProjectIds(user); // null = admin بلا قيود
+  const ids = await getAccessibleProjectIds(user); // null = بلا قيود (مدير المشاريع)
 
-  const params = [user.role, user.id];
+  const params = [user.id];
   let projectFilter = '';
   if (ids !== null) {
     params.push(ids);
     projectFilter = ` AND (o.project_id IS NULL OR o.project_id = ANY($${params.length}))`;
+  }
+  let managerBypass = '';
+  if (isManager(user)) {
+    // مدير المشاريع يرى كل الطلبات بلا قيد إسناد
+    managerBypass = ' OR true';
   }
 
   const rows = (await db.query(
@@ -33,11 +41,9 @@ router.get('/', async (req, res) => {
      FROM orders o
      JOIN users u ON u.id = o.created_by
      JOIN order_approval_steps s ON s.order_id = o.id AND s.level_number = o.current_level AND s.status='pending'
-     JOIN approval_levels_config c ON c.level_number = s.level_number
      LEFT JOIN projects p ON p.id = o.project_id
      WHERE o.status = 'pending_approval'
-       AND (c.required_role = $1 OR $1 = 'admin')
-       AND (o.assigned_approver_id IS NULL OR o.assigned_approver_id = $2 OR $1 = 'admin')
+       AND (o.assigned_approver_id IS NULL OR o.assigned_approver_id = $1 ${managerBypass})
        ${projectFilter}
      ORDER BY o.updated_at ASC`,
     params
@@ -62,7 +68,7 @@ async function getOrderFull(orderId) {
 
 /** تحقق: هل يُسمح لهذا المستخدم بمراجعة/الرد على هذا الأمر تحديدًا؟ */
 async function checkApproverAllowed(order, user) {
-  if (user.role === 'admin') return true;
+  if (isManager(user)) return true;
   if (order.assigned_approver_id && order.assigned_approver_id !== user.id) return false;
   return canAccessProject(user, order.project_id);
 }
