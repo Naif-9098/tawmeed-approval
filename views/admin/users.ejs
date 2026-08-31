@@ -5,34 +5,59 @@
 
   <div class="card">
     <h3 style="margin-top:0;">إضافة مستخدم جديد</h3>
-    <form method="POST" action="/admin/users/new" class="form-grid">
+    <form method="POST" action="/admin/users/new" class="form-grid" id="new-user-form">
       <div class="form-field"><label>الاسم</label><input name="name" required></div>
       <div class="form-field"><label>البريد الإلكتروني</label><input type="email" name="email" required></div>
       <div class="form-field"><label>كلمة المرور</label><input type="password" name="password" required minlength="6"></div>
       <div class="form-field">
         <label>الدور (Role)</label>
-        <select name="role" required>
-          <option value="employee">موظف — إنشاء وتعديل أوامر التعميد الخاصة به</option>
-          <option value="approver">معتمد — مراجعة واعتماد/رفض الطلبات</option>
-          <option value="admin">مدير النظام — إدارة كاملة</option>
+        <select name="role" id="role-select" onchange="toggleProjectsField()">
+          <% roleOptions.forEach(r => { %><option value="<%= r.value %>"><%= r.label %></option><% }) %>
         </select>
       </div>
       <div class="form-field"><label>المسمى الوظيفي (اختياري)</label><input name="job_title"></div>
       <div style="align-self:end;"><button type="submit" class="btn btn-primary">+ إضافة</button></div>
+
+      <div class="form-field" id="projects-field" style="grid-column:1/-1; display:none;">
+        <label>المشاريع المسندة (لدور مسؤول الموقع)</label>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; border:1px solid var(--line-soft); border-radius:6px; padding:10px;">
+          <% allProjects.forEach(p => { %>
+            <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:400;">
+              <input type="checkbox" name="project_ids" value="<%= p.id %>"> <%= p.name %> (<%= p.code %>)
+            </label>
+          <% }) %>
+        </div>
+      </div>
     </form>
   </div>
 
   <div class="card" style="padding:0;">
     <table>
-      <thead><tr><th>الاسم</th><th>البريد الإلكتروني</th><th>الدور</th><th>المسمى الوظيفي</th><th>الحالة</th><th></th></tr></thead>
+      <thead><tr><th>الاسم</th><th>البريد</th><th>الدور</th><th>صلاحية الاعتماد</th><th>المشاريع المسندة</th><th>الحالة</th><th>آخر دخول</th><th></th></tr></thead>
       <tbody>
         <% users.forEach(u => { %>
         <tr>
           <td><%= u.name %></td>
           <td class="mono"><%= u.email %></td>
-          <td><%= u.role === 'admin' ? 'مدير النظام' : (u.role === 'approver' ? 'معتمد' : 'موظف') %></td>
-          <td><%= u.job_title || '—' %></td>
+          <td>
+            <form method="POST" action="/admin/users/<%= u.id %>/role" style="display:flex; gap:4px;">
+              <select name="role" style="font-size:11.5px; padding:4px;">
+                <% roleOptions.forEach(r => { %><option value="<%= r.value %>" <%= u.role===r.value?'selected':'' %>><%= r.label %></option><% }) %>
+              </select>
+              <button type="submit" class="btn btn-ghost btn-sm">حفظ</button>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="/admin/users/<%= u.id %>/can-approve/toggle" style="margin:0;">
+              <button type="submit" class="btn <%= u.can_approve ? 'btn-good' : 'btn-ghost' %> btn-sm"><%= u.can_approve ? 'مفعّلة' : 'غير مفعّلة' %></button>
+            </form>
+          </td>
+          <td style="font-size:11.5px;">
+            <%= (assignmentsByUser[u.id] || []).join('، ') || '—' %>
+            <br><a href="/admin/users/<%= u.id %>/projects" style="font-size:11px;">إدارة المشاريع</a>
+          </td>
           <td><span class="badge <%= u.active ? 'badge-approved' : 'badge-rejected' %>"><%= u.active ? 'مفعّل' : 'معطّل' %></span></td>
+          <td style="font-size:11px;"><%= u.last_login_at ? new Date(u.last_login_at).toLocaleString('ar-SA') : '—' %></td>
           <td>
             <form method="POST" action="/admin/users/<%= u.id %>/toggle" style="margin:0;">
               <button type="submit" class="btn btn-ghost btn-sm"><%= u.active ? 'تعطيل' : 'تفعيل' %></button>
@@ -44,5 +69,11 @@
     </table>
   </div>
 </div>
+<script>
+function toggleProjectsField(){
+  const role = document.getElementById('role-select').value;
+  document.getElementById('projects-field').style.display = (role === 'site_officer') ? 'block' : 'none';
+}
+</script>
 </body>
 </html>
