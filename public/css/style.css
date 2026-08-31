@@ -139,3 +139,8 @@ tbody tr:hover{background:#FFFBF3;}
 .filter-bar input[type=text]{flex:1; min-width:160px;}
 
 .project-banner{background:#FFF3DE; border:1px solid var(--amber); border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:13.5px;}
+
+/* ---------- Payment certificates status badges ---------- */
+.badge-pending_review{background:#FFF3DE; color:var(--amber-dark);}
+.badge-transferred{background:#E9EEF9; color:#3454A0;}
+.badge-paid{background:#E4F5EB; color:var(--good);}
