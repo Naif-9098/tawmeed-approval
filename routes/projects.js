@@ -13,6 +13,10 @@ const ORDER_STATUS_LABELS = {
   draft: 'مسودة', pending_approval: 'بانتظار الاعتماد', approved: 'معتمد',
   rejected: 'مرفوض', returned_for_edit: 'معاد للتعديل',
 };
+const CERT_STATUS_LABELS = {
+  draft: 'مسودة', pending_review: 'بانتظار المراجعة', approved: 'معتمد',
+  rejected: 'مرفوض', returned_for_edit: 'معاد للتعديل', transferred: 'محول للمحاسبة', paid: 'تم الصرف',
+};
 
 router.use(requireLogin);
 
@@ -172,7 +176,7 @@ router.get('/:id', async (req, res) => {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'ليست لديك صلاحية الوصول لهذا المشروع.' });
   }
 
-  const tab = ['overview', 'orders', 'pending', 'approved', 'rejected', 'files', 'activity'].includes(req.query.tab)
+  const tab = ['overview', 'orders', 'pending', 'approved', 'rejected', 'files', 'activity', 'certificates'].includes(req.query.tab)
     ? req.query.tab : 'overview';
 
   // خصوصية الأوامر: من يجب أن يرى أوامره الخاصة فقط داخل هذا المشروع؟
@@ -242,15 +246,48 @@ router.get('/:id', async (req, res) => {
     `, ownFilterParams)).rows;
   }
 
+  let certificates = [];
+  if (tab === 'certificates') {
+    const cparams = [projectId];
+    let cOwnershipFilter = '';
+    if (ownOrdersOnly(user)) {
+      cparams.push(user.id);
+      cOwnershipFilter = ` AND o.created_by = $${cparams.length}`;
+    }
+    let cSearchFilter = '';
+    if (req.query.cq) {
+      cparams.push(`%${req.query.cq}%`);
+      cSearchFilter = ` AND (c.cert_no ILIKE $${cparams.length} OR o.project_order_no ILIKE $${cparams.length} OR o.order_no ILIKE $${cparams.length} OR o.contractor_name ILIKE $${cparams.length})`;
+    }
+    let cExtraFilter = '';
+    if (req.query.cstatus) { cparams.push(req.query.cstatus); cExtraFilter += ` AND c.status = $${cparams.length}`; }
+    if (req.query.ccontractor) { cparams.push(`%${req.query.ccontractor}%`); cExtraFilter += ` AND o.contractor_name ILIKE $${cparams.length}`; }
+    if (req.query.cdate_from) { cparams.push(req.query.cdate_from); cExtraFilter += ` AND c.cert_date >= $${cparams.length}`; }
+    if (req.query.cdate_to) { cparams.push(req.query.cdate_to); cExtraFilter += ` AND c.cert_date <= $${cparams.length}`; }
+
+    certificates = (await db.query(`
+      SELECT c.*, o.project_order_no, o.order_no, o.contractor_name, o.grand_total AS order_total,
+        (o.grand_total - COALESCE((
+          SELECT SUM(c2.grand_total) FROM payment_certificates c2
+          WHERE c2.order_id = o.id AND c2.status IN ('approved','transferred','paid')
+        ),0)) AS order_remaining
+      FROM payment_certificates c
+      JOIN orders o ON o.id = c.order_id
+      WHERE o.project_id = $1 ${cOwnershipFilter} ${cSearchFilter} ${cExtraFilter}
+      ORDER BY c.created_at DESC
+    `, cparams)).rows;
+  }
+
   const creators = (await db.query(
     `SELECT DISTINCT u.id, u.name FROM orders o JOIN users u ON u.id = o.created_by WHERE o.project_id = $1 ${ownFilterSql} ORDER BY u.name`,
     ownFilterParams
   )).rows;
 
   res.render('projects/view', {
-    project, tab, stats, recentOrders, orders, activity, creators,
+    project, tab, stats, recentOrders, orders, activity, certificates, creators,
     approversList: await approversList(),
     statusLabels: PROJECT_STATUS_LABELS, orderStatusLabels: ORDER_STATUS_LABELS,
+    certStatusLabels: CERT_STATUS_LABELS,
     q: req.query,
     canManage: canManageProjects(user),
     canCreateHere: user.role !== 'accountant',
