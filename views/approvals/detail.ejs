@@ -1,13 +1,13 @@
-<%- include('../partials/header', { title: 'مراجعة أمر ' + order.order_no }) %>
+<%- include('../partials/header', { title: 'مراجعة أمر ' + (order.project_order_no || order.order_no) }) %>
 <div class="wrap">
-  <h2 class="page-title">مراجعة أمر تعميد <span class="mono"><%= order.order_no %></span></h2>
+  <h2 class="page-title">مراجعة أمر تعميد <span class="mono"><%= order.project_order_no || order.order_no %></span></h2>
   <span class="badge badge-<%= order.status %>"><%= statusLabels[order.status] %></span>
 
   <div class="card" style="margin-top:16px;">
     <div class="form-grid">
-      <div><b>رقم الأمر:</b> <%= order.order_no %></div>
+      <div><b>رقم الأمر:</b> <%= order.project_order_no || order.order_no %></div>
       <div><b>التاريخ:</b> <%= order.order_date ? new Date(order.order_date).toISOString().slice(0,10) : '—' %></div>
-      <div><b>اسم المشروع:</b> <%= order.project_name || '—' %></div>
+      <div><b>اسم المشروع:</b> <%= order.project_name_rel || order.project_name || '—' %></div>
       <div><b>المقاول / المورد:</b> <%= order.contractor_name || '—' %></div>
       <div><b>نطاق العمل:</b> <%= order.scope || '—' %></div>
       <div><b>مسؤول المشروع:</b> <%= order.project_manager || '—' %></div>
