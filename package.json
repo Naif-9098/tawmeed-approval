@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "seed": "node seed.js",
-    "migrate:projects": "node migrate_projects.js"
+    "migrate:projects": "node migrate_projects.js",
+    "migrate:roles": "node migrate_roles.js"
   },
   "engines": {
     "node": ">=18.0.0"
