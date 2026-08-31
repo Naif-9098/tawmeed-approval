@@ -1,0 +1,170 @@
+<%- include('../partials/header', { title: project.name }) %>
+<div class="wrap">
+  <%- include('../partials/breadcrumbs', { crumbs: [
+    { label: 'المشاريع', url: '/projects' },
+    { label: project.name }
+  ] }) %>
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+    <div>
+      <h2 class="page-title" style="margin-bottom:6px;"><%= project.name %> <span class="mono" style="font-size:14px; color:#888;"><%= project.code %></span></h2>
+      <span class="badge proj-badge-<%= project.status %>"><%= statusLabels[project.status] %></span>
+    </div>
+    <% if (canManage) { %>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="/projects/<%= project.id %>/edit" class="btn btn-ghost">تعديل المشروع</a>
+      <a href="/projects/<%= project.id %>/access" class="btn btn-ghost">صلاحيات الوصول</a>
+      <% if (project.status === 'archived') { %>
+        <form method="POST" action="/projects/<%= project.id %>/activate" style="margin:0;"><button class="btn btn-primary">إعادة تفعيل</button></form>
+      <% } else { %>
+        <form method="POST" action="/projects/<%= project.id %>/archive" style="margin:0;" onsubmit="return confirm('سيتم أرشفة المشروع، ولن يمكن إنشاء أوامر جديدة بداخله حتى تُعاد تفعيله. متابعة؟');"><button class="btn btn-ghost">أرشفة</button></form>
+      <% } %>
+    </div>
+    <% } %>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-bar">
+    <a href="/projects/<%= project.id %>?tab=overview" class="tab-link <%= tab==='overview'?'active':'' %>">نظرة عامة</a>
+    <a href="/projects/<%= project.id %>?tab=orders" class="tab-link <%= tab==='orders'?'active':'' %>">أوامر التعميد</a>
+    <a href="/projects/<%= project.id %>?tab=pending" class="tab-link <%= tab==='pending'?'active':'' %>">بانتظار الاعتماد</a>
+    <a href="/projects/<%= project.id %>?tab=approved" class="tab-link <%= tab==='approved'?'active':'' %>">المعتمدة</a>
+    <a href="/projects/<%= project.id %>?tab=rejected" class="tab-link <%= tab==='rejected'?'active':'' %>">المرفوضة</a>
+    <a href="/projects/<%= project.id %>?tab=files" class="tab-link <%= tab==='files'?'active':'' %>">الملفات والمرفقات</a>
+    <a href="/projects/<%= project.id %>?tab=activity" class="tab-link <%= tab==='activity'?'active':'' %>">سجل النشاط</a>
+  </div>
+
+  <% if (tab === 'overview') { %>
+    <div class="dash-grid">
+      <div class="dash-card"><div class="dash-num"><%= stats.order_count %></div><div class="dash-label">عدد أوامر التعميد</div></div>
+      <div class="dash-card"><div class="dash-num mono"><%= Number(stats.total_value).toLocaleString('en-US',{minimumFractionDigits:0}) %></div><div class="dash-label">إجمالي قيمة الأوامر</div></div>
+      <div class="dash-card"><div class="dash-num mono" style="color:var(--good);"><%= Number(stats.approved_value).toLocaleString('en-US',{minimumFractionDigits:0}) %></div><div class="dash-label">قيمة الأوامر المعتمدة</div></div>
+      <div class="dash-card"><div class="dash-num mono" style="color:var(--amber-dark);"><%= Number(stats.pending_value).toLocaleString('en-US',{minimumFractionDigits:0}) %></div><div class="dash-label">قيمة الأوامر بانتظار الاعتماد</div></div>
+      <div class="dash-card"><div class="dash-num" style="color:var(--bad);"><%= stats.rejected_count %></div><div class="dash-label">عدد الأوامر المرفوضة</div></div>
+    </div>
+
+    <div class="card">
+      <div class="form-grid">
+        <div><b>اسم العميل / المالك:</b> <%= project.client_name || '—' %></div>
+        <div><b>موقع المشروع:</b> <%= project.location || '—' %></div>
+        <div><b>مدير المشروع:</b> <%= project.project_manager || '—' %></div>
+        <div><b>تاريخ البداية:</b> <%= project.start_date ? new Date(project.start_date).toISOString().slice(0,10) : '—' %></div>
+        <div><b>تاريخ النهاية المتوقع:</b> <%= project.end_date ? new Date(project.end_date).toISOString().slice(0,10) : '—' %></div>
+      </div>
+      <% if (project.notes) { %><p style="white-space:pre-wrap; margin-top:12px; border-top:1px solid #eee; padding-top:10px;"><%= project.notes %></p><% } %>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">آخر الأوامر المُنشأة</h3>
+      <% if (recentOrders.length === 0) { %>
+        <div class="empty-state">لا توجد أوامر بعد.</div>
+      <% } else { %>
+      <table>
+        <thead><tr><th>الرقم</th><th>المقاول</th><th>الإجمالي</th><th>الحالة</th><th>المنشئ</th><th></th></tr></thead>
+        <tbody>
+          <% recentOrders.forEach(o => { %>
+          <tr>
+            <td class="mono"><%= o.project_order_no || o.order_no %></td>
+            <td><%= o.contractor_name || '—' %></td>
+            <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+            <td><span class="badge badge-<%= o.status %>"><%= orderStatusLabels[o.status] %></span></td>
+            <td><%= o.creator_name %></td>
+            <td><a href="/orders/<%= o.id %>" class="btn btn-ghost btn-sm">عرض</a></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+  <% } %>
+
+  <% if (['orders','pending','approved','rejected'].includes(tab)) { %>
+    <div class="card">
+      <% if (project.status !== 'archived') { %>
+      <div style="margin-bottom:14px;">
+        <a href="/projects/<%= project.id %>/orders/new" class="btn btn-primary">+ إنشاء أمر تعميد</a>
+      </div>
+      <% } %>
+      <form method="GET" action="/projects/<%= project.id %>" class="filter-bar">
+        <input type="hidden" name="tab" value="<%= tab %>">
+        <input type="text" name="q" placeholder="ابحث بالوصف، رقم الأمر، أو المقاول..." value="<%= q.q || '' %>">
+        <select name="status">
+          <option value="">كل الحالات</option>
+          <option value="draft" <%= q.status==='draft'?'selected':'' %>>مسودة</option>
+          <option value="pending_approval" <%= q.status==='pending_approval'?'selected':'' %>>بانتظار الاعتماد</option>
+          <option value="approved" <%= q.status==='approved'?'selected':'' %>>معتمد</option>
+          <option value="rejected" <%= q.status==='rejected'?'selected':'' %>>مرفوض</option>
+          <option value="returned_for_edit" <%= q.status==='returned_for_edit'?'selected':'' %>>معاد للتعديل</option>
+        </select>
+        <input type="text" name="contractor" placeholder="المقاول" value="<%= q.contractor || '' %>">
+        <select name="creator">
+          <option value="">كل المنشئين</option>
+          <% creators.forEach(c => { %><option value="<%= c.id %>" <%= q.creator==String(c.id)?'selected':'' %>><%= c.name %></option><% }) %>
+        </select>
+        <select name="approver">
+          <option value="">كل المعتمدين</option>
+          <% approversList.forEach(a => { %><option value="<%= a.id %>" <%= q.approver==String(a.id)?'selected':'' %>><%= a.name %></option><% }) %>
+        </select>
+        <input type="date" name="date_from" value="<%= q.date_from || '' %>">
+        <input type="date" name="date_to" value="<%= q.date_to || '' %>">
+        <button type="submit" class="btn btn-ghost btn-sm">تصفية</button>
+      </form>
+
+      <% if (orders.length === 0) { %>
+        <div class="empty-state">لا توجد أوامر مطابقة.</div>
+      <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>رقم الأمر</th><th>وصف مختصر</th><th>المقاول</th><th>تاريخ الإنشاء</th><th>الإجمالي</th>
+            <th>المنشئ</th><th>المعتمد المسؤول</th><th>الحالة</th><th>آخر تحديث</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% orders.forEach(o => { %>
+          <tr>
+            <td class="mono"><%= o.project_order_no || o.order_no %></td>
+            <td style="text-align:right;"><%= o.scope || '—' %></td>
+            <td><%= o.contractor_name || '—' %></td>
+            <td class="mono" style="font-size:11px;"><%= o.order_date ? new Date(o.order_date).toISOString().slice(0,10) : '—' %></td>
+            <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+            <td><%= o.creator_name %></td>
+            <td><%= o.approver_name || '—' %></td>
+            <td><span class="badge badge-<%= o.status %>"><%= orderStatusLabels[o.status] %></span></td>
+            <td class="mono" style="font-size:11px;"><%= new Date(o.updated_at).toLocaleString('ar-SA') %></td>
+            <td><a href="/orders/<%= o.id %>" class="btn btn-ghost btn-sm">عرض التفاصيل</a></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+  <% } %>
+
+  <% if (tab === 'files') { %>
+    <div class="card">
+      <div class="empty-state">خاصية الملفات والمرفقات لم تُفعّل بعد في هذا الإصدار من النظام.</div>
+    </div>
+  <% } %>
+
+  <% if (tab === 'activity') { %>
+    <div class="card">
+      <h3 style="margin-top:0;">سجل النشاط الخاص بهذا المشروع</h3>
+      <% if (activity.length === 0) { %>
+        <div class="empty-state">لا يوجد نشاط بعد.</div>
+      <% } else { %>
+      <ul class="audit-list">
+        <% activity.forEach(a => { %>
+        <li>
+          <div class="a-action"><%= a.action %></div>
+          <div class="a-meta">بواسطة: <%= a.actor_name %> — <%= new Date(a.created_at).toLocaleString('ar-SA') %></div>
+          <% if (a.details) { %><div class="a-details"><%= a.details %></div><% } %>
+        </li>
+        <% }) %>
+      </ul>
+      <% } %>
+    </div>
+  <% } %>
+</div>
+</body>
+</html>
