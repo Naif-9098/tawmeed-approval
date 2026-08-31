@@ -1,0 +1,114 @@
+<%- include('../partials/header', { title: 'مستخلص ' + cert.cert_no }) %>
+<div class="wrap">
+  <%- include('../partials/breadcrumbs', { crumbs: [
+    { label: 'المشاريع', url: '/projects' },
+    { label: order.project_name_rel || order.project_name || 'بدون مشروع', url: order.project_id ? '/projects/' + order.project_id : '/orders' },
+    { label: order.project_order_no || order.order_no, url: '/orders/' + order.id },
+    { label: 'مستخلص ' + cert.cert_no }
+  ] }) %>
+  <h2 class="page-title">تعديل مستخلص <span class="mono"><%= cert.cert_no %></span></h2>
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <div class="project-banner">
+    مرتبط بأمر التعميد <b><%= order.project_order_no || order.order_no %></b> —
+    المشروع: <b><%= order.project_name_rel || order.project_name || '—' %></b> —
+    المقاول: <b><%= order.contractor_name || '—' %></b>
+  </div>
+
+  <form method="POST" action="/certificates/<%= cert.id %>/edit">
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-field"><label>رقم المستخلص</label><input value="<%= cert.cert_no %>" disabled></div>
+        <div class="form-field"><label>رقم أمر التعميد</label><input value="<%= order.project_order_no || order.order_no %>" disabled></div>
+        <div class="form-field"><label>التاريخ</label><input type="date" name="cert_date" value="<%= cert.cert_date ? new Date(cert.cert_date).toISOString().slice(0,10) : '' %>"></div>
+        <div class="form-field">
+          <label>طريقة الدفع</label>
+          <select name="payment_method">
+            <option value="">— اختر —</option>
+            <option value="cash" <%= cert.payment_method==='cash'?'selected':'' %>>نقدًا</option>
+            <option value="transfer" <%= cert.payment_method==='transfer'?'selected':'' %>>تحويل</option>
+            <option value="retention" <%= cert.payment_method==='retention'?'selected':'' %>>ضمان أعمال</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">جدول دفعات المستخلص</h3>
+      <table>
+        <thead><tr><th style="width:40px;">#</th><th>وصف الدفعة</th><th style="width:140px;">المبلغ</th><th style="width:36px;"></th></tr></thead>
+        <tbody id="items-body"></tbody>
+      </table>
+      <button type="button" class="add-row" onclick="addItemRow()">+ إضافة دفعة</button>
+    </div>
+
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-field"><label>الخصم</label><input type="number" step="any" name="discount" id="discount" value="<%= cert.discount %>" oninput="calcAll()"></div>
+        <div class="form-field"><label>نسبة الضريبة %</label><input type="number" step="any" name="vat_rate" id="vat-rate" value="<%= cert.vat_rate %>" oninput="calcAll()"></div>
+      </div>
+      <div style="text-align:left; font-weight:700; margin-top:10px; line-height:2;">
+        الإجمالي: <span class="mono" id="subtotal-disp">0.00</span><br>
+        الإجمالي بعد الخصم: <span class="mono" id="after-discount-disp">0.00</span><br>
+        الضريبة: <span class="mono" id="vat-disp">0.00</span><br>
+        الإجمالي النهائي: <span class="mono" id="grand-disp" style="font-size:16px;">0.00</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">ملاحظات</h3>
+      <textarea name="notes" rows="4"><%= cert.notes || '' %></textarea>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="/certificates/<%= cert.id %>" class="btn btn-ghost">إلغاء</a>
+    </div>
+  </form>
+</div>
+
+<script>
+let itemSeq = 0;
+
+function addItemRow(desc, amount){
+  itemSeq++;
+  const tbody = document.getElementById('items-body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="mono">${tbody.children.length + 1}</td>
+    <td><input type="text" name="item_desc" style="width:100%;border:none;text-align:right;" value="${desc ? desc.replace(/"/g,'&quot;') : ''}" placeholder="وصف الدفعة"></td>
+    <td><input type="number" step="any" name="item_amount" style="width:100%;border:none;text-align:center;" value="${amount||''}" oninput="calcAll()"></td>
+    <td><button type="button" class="row-del" onclick="this.closest('tr').remove(); renumber(); calcAll();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+function renumber(){ document.querySelectorAll('#items-body tr').forEach((r,i)=>{ r.children[0].textContent = i+1; }); }
+function fmt(n){ if(isNaN(n)) n=0; return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function calcAll(){
+  let subtotal = 0;
+  document.querySelectorAll('#items-body tr').forEach(tr=>{
+    const amount = parseFloat(tr.querySelector('[name=item_amount]').value)||0;
+    subtotal += amount;
+  });
+  const discount = parseFloat(document.getElementById('discount').value)||0;
+  const afterDiscount = subtotal - discount;
+  const vatRate = parseFloat(document.getElementById('vat-rate').value)||0;
+  const vatAmount = afterDiscount*vatRate/100;
+  const grand = afterDiscount+vatAmount;
+  document.getElementById('subtotal-disp').textContent = fmt(subtotal);
+  document.getElementById('after-discount-disp').textContent = fmt(afterDiscount);
+  document.getElementById('vat-disp').textContent = fmt(vatAmount);
+  document.getElementById('grand-disp').textContent = fmt(grand);
+}
+
+const existingItems = <%- JSON.stringify(items || []) %>;
+if(existingItems.length){
+  existingItems.forEach(it => addItemRow(it.description, it.amount));
+} else {
+  for(let i=0;i<2;i++) addItemRow();
+}
+calcAll();
+</script>
+</body>
+</html>
