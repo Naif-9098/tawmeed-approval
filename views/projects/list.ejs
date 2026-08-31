@@ -1,0 +1,34 @@
+<%- include('../partials/header', { title: 'المشاريع' }) %>
+<div class="wrap">
+  <%- include('../partials/breadcrumbs', { crumbs: [{ label: 'المشاريع' }] }) %>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h2 class="page-title" style="margin:0;">المشاريع</h2>
+    <% if (currentUser.role === 'admin') { %>
+      <a href="/projects/new" class="btn btn-primary">+ مشروع جديد</a>
+    <% } %>
+  </div>
+
+  <% if (projects.length === 0) { %>
+    <div class="card"><div class="empty-state">لا توجد مشاريع بعد.</div></div>
+  <% } else { %>
+  <div class="project-grid">
+    <% projects.forEach(p => { %>
+    <div class="project-card <%= p.status === 'archived' ? 'archived' : '' %>">
+      <div class="project-card-head">
+        <h3><%= p.name %></h3>
+        <span class="badge proj-badge-<%= p.status %>"><%= statusLabels[p.status] %></span>
+      </div>
+      <div class="project-card-code mono"><%= p.code %></div>
+      <div class="project-card-stats">
+        <div><span class="stat-num"><%= p.order_count %></span><span class="stat-label">عدد أوامر التعميد</span></div>
+        <div><span class="stat-num mono"><%= Number(p.total_value).toLocaleString('en-US',{minimumFractionDigits:0}) %></span><span class="stat-label">إجمالي القيمة</span></div>
+        <div><span class="stat-num" style="color:var(--amber-dark);"><%= p.pending_count %></span><span class="stat-label">بانتظار الاعتماد</span></div>
+      </div>
+      <a href="/projects/<%= p.id %>" class="btn btn-ghost" style="width:100%; text-align:center; margin-top:10px;">فتح المشروع</a>
+    </div>
+    <% }) %>
+  </div>
+  <% } %>
+</div>
+</body>
+</html>
