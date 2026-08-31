@@ -1,0 +1,7 @@
+<div class="breadcrumbs">
+  <a href="/orders">الرئيسية</a>
+  <% crumbs.forEach(c => { %>
+    <span class="crumb-sep">›</span>
+    <% if (c.url) { %><a href="<%= c.url %>"><%= c.label %></a><% } else { %><span class="crumb-current"><%= c.label %></span><% } %>
+  <% }) %>
+</div>
