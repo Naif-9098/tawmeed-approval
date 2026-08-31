@@ -1,0 +1,52 @@
+<%- include('../partials/header', { title: 'صلاحيات الوصول — ' + project.name }) %>
+<div class="wrap">
+  <%- include('../partials/breadcrumbs', { crumbs: [
+    { label: 'المشاريع', url: '/projects' },
+    { label: project.name, url: '/projects/' + project.id },
+    { label: 'صلاحيات الوصول' }
+  ] }) %>
+  <h2 class="page-title">صلاحيات الوصول لمشروع <%= project.name %></h2>
+  <p style="color:#777; font-size:13px; margin-top:-10px;">
+    إذا لم تُضِف أي مستخدم هنا، يبقى المشروع "مفتوحًا" ويراه كل من له صلاحية أصلاً (كل موظف ومعتمد).
+    بمجرد إضافة مستخدم واحد، يقتصر الوصول على المذكورين هنا + مدير النظام فقط.
+  </p>
+
+  <div class="card">
+    <h3 style="margin-top:0;">إضافة مستخدم</h3>
+    <form method="POST" action="/projects/<%= project.id %>/access/add" style="display:flex; gap:10px;">
+      <select name="user_id" style="flex:1;">
+        <% allUsers.forEach(u => { %>
+          <option value="<%= u.id %>"><%= u.name %> — <%= u.role === 'admin' ? 'مدير النظام' : (u.role === 'approver' ? 'معتمد' : 'موظف') %></option>
+        <% }) %>
+      </select>
+      <button type="submit" class="btn btn-primary">+ إضافة</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <% if (granted.length === 0) { %>
+      <div class="empty-state">لا يوجد قيود — المشروع مفتوح لكل المستخدمين المصرح لهم بحسب دورهم.</div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>الاسم</th><th>الدور</th><th></th></tr></thead>
+      <tbody>
+        <% granted.forEach(u => { %>
+        <tr>
+          <td><%= u.name %></td>
+          <td><%= u.role === 'admin' ? 'مدير النظام' : (u.role === 'approver' ? 'معتمد' : 'موظف') %></td>
+          <td>
+            <form method="POST" action="/projects/<%= project.id %>/access/<%= u.id %>/remove" style="margin:0;">
+              <button type="submit" class="btn btn-ghost btn-sm">إزالة</button>
+            </form>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
+  <a href="/projects/<%= project.id %>" class="btn btn-ghost">رجوع للمشروع</a>
+</div>
+</body>
+</html>
