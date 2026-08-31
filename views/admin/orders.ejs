@@ -1,14 +1,32 @@
 <%- include('../partials/header', { title: 'كل أوامر التعميد' }) %>
 <div class="wrap">
-  <h2 class="page-title">كل أوامر التعميد</h2>
+  <h2 class="page-title">كل أوامر التعميد (من جميع المشاريع)</h2>
+  <div class="card">
+    <form method="GET" action="/admin/orders" class="filter-bar">
+      <input type="text" name="q" placeholder="ابحث بالوصف، رقم الأمر، أو المقاول..." value="<%= q.q || '' %>">
+      <select name="project_id">
+        <option value="">كل المشاريع</option>
+        <% projects.forEach(p => { %><option value="<%= p.id %>" <%= q.project_id==String(p.id)?'selected':'' %>><%= p.name %> (<%= p.code %>)</option><% }) %>
+      </select>
+      <select name="status">
+        <option value="">كل الحالات</option>
+        <option value="draft" <%= q.status==='draft'?'selected':'' %>>مسودة</option>
+        <option value="pending_approval" <%= q.status==='pending_approval'?'selected':'' %>>بانتظار الاعتماد</option>
+        <option value="approved" <%= q.status==='approved'?'selected':'' %>>معتمد</option>
+        <option value="rejected" <%= q.status==='rejected'?'selected':'' %>>مرفوض</option>
+        <option value="returned_for_edit" <%= q.status==='returned_for_edit'?'selected':'' %>>معاد للتعديل</option>
+      </select>
+      <button type="submit" class="btn btn-ghost btn-sm">تصفية</button>
+    </form>
+  </div>
   <div class="card" style="padding:0;">
     <table>
       <thead><tr><th>رقم الأمر</th><th>المشروع</th><th>المُنشئ</th><th>الإجمالي</th><th>الحالة</th><th>آخر تحديث</th><th></th></tr></thead>
       <tbody>
         <% orders.forEach(o => { %>
         <tr>
-          <td class="mono"><%= o.order_no %></td>
-          <td><%= o.project_name || '—' %></td>
+          <td class="mono"><%= o.project_order_no || o.order_no %></td>
+          <td><% if (o.project_id) { %><a href="/projects/<%= o.project_id %>"><%= o.project_name_rel %> (<%= o.project_code %>)</a><% } else { %><%= o.project_name || '—' %><% } %></td>
           <td><%= o.creator_name %></td>
           <td class="mono"><%= Number(o.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
           <td><span class="badge badge-<%= o.status %>"><%= statusLabels[o.status] %></span></td>
