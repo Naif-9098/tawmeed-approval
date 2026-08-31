@@ -5,6 +5,7 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { isManager, canManageUsers, roleLabel } = require('../permissions');
+const { getSetting, setSetting } = require('../settings');
 
 router.use(requireLogin);
 router.use(requirePermission(canManageUsers));
@@ -166,10 +167,18 @@ router.get('/audit-log', async (req, res) => {
   res.render('admin/audit', { logs: rows });
 });
 
-/* -------- إعدادات مستويات الاعتماد -------- */
+/* -------- إعدادات مستويات الاعتماد + نسبة ضريبة المستخلصات الافتراضية -------- */
 router.get('/settings', async (req, res) => {
   const levels = (await db.query('SELECT * FROM approval_levels_config ORDER BY level_number')).rows;
-  res.render('admin/settings', { levels, error: null });
+  const defaultCertVat = await getSetting('default_cert_vat_rate', '15');
+  res.render('admin/settings', { levels, error: null, defaultCertVat });
+});
+
+router.post('/settings/cert-vat', async (req, res) => {
+  const admin = req.session.user;
+  await setSetting('default_cert_vat_rate', req.body.default_cert_vat_rate || '15');
+  await logAction({ action: 'تعديل نسبة الضريبة الافتراضية للمستخلصات', actorId: admin.id, actorName: admin.name, details: `القيمة الجديدة: ${req.body.default_cert_vat_rate}%` });
+  res.redirect('/admin/settings');
 });
 
 router.post('/settings/levels/new', async (req, res) => {
