@@ -11,6 +11,7 @@ const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', 1);
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -30,6 +31,7 @@ app.use(injectUser);
 
 // المسارات
 app.use('/', require('./routes/auth'));
+app.use('/projects', require('./routes/projects'));
 app.use('/orders', require('./routes/orders'));
 app.use('/approvals', require('./routes/approvals'));
 app.use('/admin', require('./routes/admin'));
