@@ -172,6 +172,38 @@
   </div>
 
   <div class="card">
+    <h3 style="margin-top:0;">المستخلصات</h3>
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px; color:#555;">
+      <div>إجمالي أمر التعميد: <b class="mono"><%= Number(order.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></b></div>
+      <div>إجمالي المصروف: <b class="mono"><%= certsSpent.toLocaleString('en-US',{minimumFractionDigits:2}) %></b></div>
+      <div>المتبقي: <b class="mono" style="color:<%= certsRemaining < 0 ? 'var(--bad)' : 'var(--good)' %>;"><%= certsRemaining.toLocaleString('en-US',{minimumFractionDigits:2}) %></b></div>
+    </div>
+    <% if (canCreateCert) { %>
+      <form method="POST" action="/orders/<%= order.id %>/certificates/new" style="margin-bottom:14px;">
+        <button type="submit" class="btn btn-primary">+ إنشاء مستخلص</button>
+      </form>
+    <% } %>
+    <% if (certificates.length === 0) { %>
+      <div class="empty-state">لا توجد مستخلصات لهذا الأمر بعد.</div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>رقم المستخلص</th><th>التاريخ</th><th>القيمة</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        <% certificates.forEach(c => { %>
+        <tr>
+          <td class="mono"><%= c.cert_no %></td>
+          <td class="mono" style="font-size:11px;"><%= c.cert_date ? new Date(c.cert_date).toISOString().slice(0,10) : '—' %></td>
+          <td class="mono"><%= Number(c.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+          <td><span class="badge badge-<%= c.status %>"><%= certStatusLabels[c.status] %></span></td>
+          <td><a href="/certificates/<%= c.id %>" class="btn btn-ghost btn-sm">عرض</a></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
+  <div class="card">
     <h3 style="margin-top:0;">سجل العمليات</h3>
     <ul class="audit-list">
       <% audit.forEach(a => { %>
