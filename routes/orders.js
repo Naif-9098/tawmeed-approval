@@ -6,7 +6,7 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { canAccessProject } = require('../projectAccess');
-const { isManager, seesAllProjects, ownOrdersOnly, canCreateOrders, canTransferFinancial, canApprove } = require('../permissions');
+const { isManager, seesAllProjects, ownOrdersOnly, canCreateOrders, canTransferFinancial, canApprove, canAddWorkItem } = require('../permissions');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -102,7 +102,7 @@ router.get('/', async (req, res) => {
 
 /* -------- إنشاء أمر جديد (مستقل، بدون مشروع — للتوافق القديم) -------- */
 router.get('/new', requirePermission(canCreateOrders), (req, res) => {
-  res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null, project: null });
+  res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null, project: null, canAddWorkItem: canAddWorkItem(req.session.user) });
 });
 
 router.post('/new', requirePermission(canCreateOrders), async (req, res) => {
@@ -156,7 +156,7 @@ router.post('/new', requirePermission(canCreateOrders), async (req, res) => {
     if (e.code === 'PROJECT_NOT_FOUND') msg = 'المشروع المحدد غير موجود.';
     if (e.code === 'PROJECT_ARCHIVED') msg = 'لا يمكن إنشاء أوامر داخل مشروع مؤرشف.';
     if (e.code === 'NO_ACCESS') msg = 'ليست لديك صلاحية الوصول لهذا المشروع.';
-    res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: msg, project: null });
+    res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: msg, project: null, canAddWorkItem: canAddWorkItem(user) });
   } finally {
     client.release();
   }
@@ -243,7 +243,7 @@ router.get('/:id/edit', async (req, res) => {
   const project = data.order.project_id
     ? (await db.query('SELECT * FROM projects WHERE id = $1', [data.order.project_id])).rows[0]
     : null;
-  res.render('orders/form', { order: data.order, items: data.items, payments: data.payments, mode: 'edit', error: null, project });
+  res.render('orders/form', { order: data.order, items: data.items, payments: data.payments, mode: 'edit', error: null, project, canAddWorkItem: canAddWorkItem(user) });
 });
 
 router.post('/:id/edit', async (req, res) => {

@@ -144,3 +144,14 @@ tbody tr:hover{background:#FFFBF3;}
 .badge-pending_review{background:#FFF3DE; color:var(--amber-dark);}
 .badge-transferred{background:#E9EEF9; color:#3454A0;}
 .badge-paid{background:#E4F5EB; color:var(--good);}
+
+/* ---------- Work items autocomplete ---------- */
+.ac-dropdown{display:none; position:absolute; top:100%; right:0; left:0; background:#fff; border:1.5px solid var(--line); border-radius:0 0 6px 6px; max-height:280px; overflow-y:auto; z-index:100; box-shadow:0 10px 30px rgba(0,0,0,.15);}
+.ac-dropdown.open{display:block;}
+.ac-item{padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; border-bottom:1px solid #f0f0f0; text-align:right; font-size:12.5px;}
+.ac-item:hover{background:#FFFBF3;}
+.ac-item .ac-desc{flex:1;}
+.ac-item .ac-unit{font-family:'JetBrains Mono',monospace; color:#888; font-size:11px; white-space:nowrap;}
+.ac-empty{padding:10px; color:#999; font-size:12px; text-align:center;}
+.quick-chip{display:inline-block; background:#F5F5F5; border:1px solid var(--line-soft); border-radius:20px; padding:3px 10px; margin:2px; font-size:11.5px; cursor:pointer; color:#444;}
+.quick-chip:hover{background:#FFF3DE; border-color:var(--amber); color:var(--amber-dark);}
