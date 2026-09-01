@@ -4,7 +4,7 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { getAccessibleProjectIds, canAccessProject } = require('../projectAccess');
-const { isManager, ownOrdersOnly, canManageProjects } = require('../permissions');
+const { isManager, ownOrdersOnly, canManageProjects, canAddWorkItem } = require('../permissions');
 
 const PROJECT_STATUS_LABELS = {
   active: 'نشط', stopped: 'متوقف', completed: 'مكتمل', archived: 'مؤرشف',
@@ -163,7 +163,7 @@ router.get('/:id/orders/new', async (req, res) => {
   if (project.status === 'archived') {
     return res.status(400).render('error', { title: 'مشروع مؤرشف', message: 'لا يمكن إنشاء أوامر جديدة داخل مشروع مؤرشف. أعد تفعيله أولاً من صفحة المشروع.' });
   }
-  res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null, project });
+  res.render('orders/form', { order: null, items: [], payments: [], mode: 'new', error: null, project, canAddWorkItem: canAddWorkItem(user) });
 });
 
 /* -------- صفحة المشروع (نظرة عامة / الأوامر / بانتظار الاعتماد / المعتمدة / المرفوضة / الملفات / سجل النشاط) -------- */

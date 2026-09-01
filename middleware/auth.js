@@ -1,4 +1,4 @@
-const { isManager, canApprove, canCreateOrders, canManageUsers, canManageProjects, canTransferFinancial, roleLabel } = require('../permissions');
+const { isManager, canApprove, canCreateOrders, canManageUsers, canManageProjects, canTransferFinancial, canAccessWorkItemsLibrary, roleLabel } = require('../permissions');
 
 function requireLogin(req, res, next) {
   if (!req.session.user) {
@@ -49,6 +49,7 @@ function injectUser(req, res, next) {
     canManageUsers: canManageUsers(user),
     canManageProjects: canManageProjects(user),
     canTransferFinancial: canTransferFinancial(user),
+    canAccessWorkItemsLibrary: canAccessWorkItemsLibrary(user),
     roleLabel: roleLabel(user.role),
   } : {};
   next();

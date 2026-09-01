@@ -1,0 +1,67 @@
+<%- include('../partials/header', { title: 'مكتبة بنود الأعمال' }) %>
+<div class="wrap">
+  <h2 class="page-title">مكتبة بنود الأعمال</h2>
+  <p style="color:#777; font-size:13px; margin-top:-10px;">
+    إجمالي البنود المُفعّلة حاليًا: <b class="mono"><%= totalActive %></b> —
+    هذه المكتبة تُستخدم للاقتراح الفوري أثناء كتابة "وصف الأعمال" في أوامر التعميد.
+    تعطيل بند هنا لا يحذفه ولا يؤثر على أي أمر تعميد استخدمه سابقًا.
+  </p>
+
+  <div class="card">
+    <form method="GET" action="/work-items" class="filter-bar">
+      <input type="text" name="q" placeholder="ابحث بالوصف أو الكلمات المفتاحية..." value="<%= q.q || '' %>">
+      <select name="category_id">
+        <option value="">كل التصنيفات الرئيسية</option>
+        <% mainCats.forEach(c => { %><option value="<%= c.id %>" <%= q.category_id==String(c.id)?'selected':'' %>><%= c.name %></option><% }) %>
+      </select>
+      <select name="status">
+        <option value="active" <%= (!q.status || q.status==='active')?'selected':'' %>>المُفعّلة فقط</option>
+        <option value="inactive" <%= q.status==='inactive'?'selected':'' %>>المعطّلة فقط</option>
+        <option value="all" <%= q.status==='all'?'selected':'' %>>الكل</option>
+      </select>
+      <button type="submit" class="btn btn-ghost btn-sm">تصفية</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <table>
+      <thead><tr><th>الوصف</th><th>التصنيف</th><th>التصنيف الفرعي</th><th>الوحدة</th><th>الاستخدام</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        <% items.forEach(it => { %>
+        <tr>
+          <td colspan="4" style="padding:0;">
+            <form method="POST" action="/work-items/<%= it.id %>/edit" style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:0;">
+              <input type="text" name="description" value="<%= it.description %>" style="border:none; padding:8px; text-align:right; background:transparent; grid-column:1;">
+              <span style="padding:8px; border-right:1px solid var(--line-soft); font-size:12.5px;"><%= it.category_name || '—' %></span>
+              <span style="padding:8px; border-right:1px solid var(--line-soft); font-size:12.5px;"><%= it.subcategory_name || '—' %></span>
+              <span style="display:flex; align-items:center; gap:4px; padding:6px; border-right:1px solid var(--line-soft);">
+                <input type="text" name="default_unit" value="<%= it.default_unit %>" list="unit-options-admin" style="width:60px; border:1px solid var(--line-soft); border-radius:5px; text-align:center; padding:4px;">
+                <input type="hidden" name="keywords" value="<%= it.keywords || '' %>">
+                <input type="hidden" name="aliases" value="<%= it.aliases || '' %>">
+                <button type="submit" class="btn btn-ghost btn-sm">حفظ</button>
+              </span>
+            </form>
+          </td>
+          <td class="mono"><%= it.usage_count %></td>
+          <td><span class="badge <%= it.active ? 'badge-approved' : 'badge-rejected' %>"><%= it.active ? 'مُفعّل' : 'معطّل' %></span></td>
+          <td>
+            <% if (canToggle) { %>
+            <form method="POST" action="/work-items/<%= it.id %>/toggle" style="margin:0;">
+              <button type="submit" class="btn btn-ghost btn-sm"><%= it.active ? 'تعطيل' : 'تفعيل' %></button>
+            </form>
+            <% } else { %>—<% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% if (items.length === 0) { %><div class="empty-state">لا توجد بنود مطابقة.</div><% } %>
+  </div>
+</div>
+<datalist id="unit-options-admin">
+  <option value="م²"><option value="م.ط"><option value="م³"><option value="عدد"><option value="قطعة">
+  <option value="وحدة"><option value="نقطة"><option value="طقم"><option value="كيلو"><option value="طن">
+  <option value="متر"><option value="يوم"><option value="مقطوعية">
+</datalist>
+</body>
+</html>

@@ -53,6 +53,25 @@ function canCreateCertificates(user) {
   return user.role !== 'accountant';
 }
 
+function canManageWorkItems(user) {
+  return isManager(user);
+}
+
+function canAddWorkItem(user) {
+  return isManager(user) || user.role === 'technical_office';
+}
+
+// تعديل وصف/وحدة بند موجود (تصحيح أخطاء إملائية مثلًا) — نفس صلاحية الإضافة حاليًا،
+// لكنها دالة منفصلة عمدًا حتى يمكن توسيعها أو تضييقها لاحقًا دون المساس بالإضافة.
+function canEditWorkItem(user) {
+  return isManager(user) || user.role === 'technical_office';
+}
+
+// من يرى صفحة "مكتبة بنود الأعمال" الكاملة؟ (تفعيل/تعطيل يبقى حصرًا لمدير المشاريع داخل الصفحة نفسها)
+function canAccessWorkItemsLibrary(user) {
+  return isManager(user) || user.role === 'technical_office';
+}
+
 function roleLabel(role) {
   return ROLE_LABELS[role] || role;
 }
@@ -60,5 +79,6 @@ function roleLabel(role) {
 module.exports = {
   ROLE_LABELS, isManager, seesAllProjects, ownOrdersOnly,
   canCreateOrders, canManageUsers, canManageProjects, canApprove,
-  canTransferFinancial, canCreateCertificates, roleLabel,
+  canTransferFinancial, canCreateCertificates, canManageWorkItems, canAddWorkItem,
+  canEditWorkItem, canAccessWorkItemsLibrary, roleLabel,
 };

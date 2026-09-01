@@ -35,6 +35,7 @@
 
     <div class="card">
       <h3 style="margin-top:0;">وصف الأعمال / البنود</h3>
+      <div id="quick-picks" style="margin-bottom:12px; font-size:12px;"></div>
       <table>
         <thead><tr><th style="width:40px;">#</th><th>وصف البند</th><th style="width:90px;">الكمية</th><th style="width:90px;">الوحدة</th><th style="width:110px;">سعر الوحدة</th><th style="width:110px;">الإجمالي</th><th style="width:36px;"></th></tr></thead>
         <tbody id="items-body"></tbody>
@@ -68,8 +69,37 @@
   </form>
 </div>
 
+<!-- نافذة إضافة بند جديد لمكتبة الأعمال -->
+<div class="modal-overlay" id="add-item-modal">
+  <div class="modal-box">
+    <h3>إضافة بند جديد لمكتبة الأعمال</h3>
+    <div class="form-field" style="margin-bottom:10px;"><label>وصف العمل</label><input type="text" id="new-wi-desc"></div>
+    <div class="form-grid" style="margin-bottom:10px;">
+      <div class="form-field"><label>التصنيف الرئيسي</label><input type="text" id="new-wi-main" placeholder="مثال: الكهرباء"></div>
+      <div class="form-field"><label>التصنيف الفرعي</label><input type="text" id="new-wi-sub" placeholder="مثال: الإنارة"></div>
+    </div>
+    <div class="form-grid" style="margin-bottom:10px;">
+      <div class="form-field"><label>الوحدة الافتراضية</label><input type="text" id="new-wi-unit" list="unit-options"></div>
+      <div class="form-field"><label>كلمات مفتاحية (اختياري)</label><input type="text" id="new-wi-keywords"></div>
+    </div>
+    <div class="form-field" style="margin-bottom:14px;"><label>أسماء بديلة (اختياري)</label><input type="text" id="new-wi-aliases"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeModal('add-item-modal')">إلغاء</button>
+      <button type="button" class="btn btn-primary" onclick="submitNewWorkItem()">حفظ وإضافة للأمر</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="unit-options">
+  <option value="م²"><option value="م.ط"><option value="م³"><option value="عدد"><option value="قطعة">
+  <option value="وحدة"><option value="نقطة"><option value="طقم"><option value="كيلو"><option value="طن">
+  <option value="متر"><option value="يوم"><option value="مقطوعية">
+</datalist>
+
 <script>
 let itemSeq = 0, paySeq = 0;
+const CAN_ADD_WORK_ITEM = <%= canAddWorkItem ? 'true' : 'false' %>;
+let activeRowForModal = null;
 
 function addItemRow(desc, qty, unit, price){
   itemSeq++;
@@ -77,14 +107,18 @@ function addItemRow(desc, qty, unit, price){
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td class="mono">${tbody.children.length + 1}</td>
-    <td><input type="text" name="item_desc" style="width:100%;border:none;text-align:right;" value="${desc ? desc.replace(/"/g,'&quot;') : ''}" placeholder="وصف البند"></td>
+    <td style="position:relative;">
+      <input type="text" name="item_desc" class="wi-desc-input" style="width:100%;border:none;text-align:right;" value="${desc ? desc.replace(/"/g,'&quot;') : ''}" placeholder="وصف البند — اكتب للبحث">
+      <div class="ac-dropdown"></div>
+    </td>
     <td><input type="number" step="any" name="item_qty" style="width:100%;border:none;text-align:center;" value="${qty||''}" oninput="calcAll()"></td>
-    <td><input type="text" name="item_unit" style="width:100%;border:none;text-align:center;" value="${unit||''}" placeholder="م²"></td>
+    <td><input type="text" name="item_unit" class="wi-unit-input" style="width:100%;border:none;text-align:center;" value="${unit||''}" placeholder="م²"></td>
     <td><input type="number" step="any" name="item_price" style="width:100%;border:none;text-align:center;" value="${price||''}" oninput="calcAll()"></td>
     <td class="mono item-total">0.00</td>
     <td><button type="button" class="row-del" onclick="this.closest('tr').remove(); renumber(); calcAll();">✕</button></td>
   `;
   tbody.appendChild(tr);
+  attachWorkItemSearch(tr);
 }
 
 function addPayRow(desc, pct){
@@ -128,6 +162,137 @@ function calcAll(){
   });
 }
 
+/* ---------------- بحث مكتبة بنود الأعمال (Autocomplete) ---------------- */
+function attachWorkItemSearch(tr){
+  const descInput = tr.querySelector('.wi-desc-input');
+  const unitInput = tr.querySelector('.wi-unit-input');
+  const dropdown = tr.querySelector('.ac-dropdown');
+  let timer = null;
+  let currentQuery = '';
+
+  descInput.addEventListener('input', () => {
+    const q = descInput.value.trim();
+    currentQuery = q;
+    clearTimeout(timer);
+    if (!q) { dropdown.classList.remove('open'); dropdown.innerHTML=''; return; }
+    timer = setTimeout(() => runSearch(q), 200);
+  });
+
+  descInput.addEventListener('blur', () => setTimeout(() => { dropdown.classList.remove('open'); dropdown.innerHTML=''; }, 150));
+
+  async function runSearch(q){
+    let results = [];
+    try {
+      const res = await fetch('/api/work-items/search?q=' + encodeURIComponent(q));
+      results = await res.json();
+    } catch(e) { results = []; }
+
+    if (results.length === 0){
+      let html = '<div class="ac-empty">لا توجد نتائج مطابقة</div>';
+      if (CAN_ADD_WORK_ITEM) {
+        html += `<div class="ac-item" style="color:var(--amber-dark); font-weight:700;" onclick="openAddWorkItemModal(this)">+ إضافة "${q.replace(/"/g,'')}" كبند جديد للمكتبة</div>`;
+      }
+      dropdown.innerHTML = html;
+      dropdown.classList.add('open');
+      dropdown.dataset.forTr = '';
+      return;
+    }
+    dropdown.innerHTML = results.map((r,i) => `
+      <div class="ac-item" data-idx="${i}">
+        <span class="ac-desc">${r.description}<br><span style="font-size:10.5px;color:#aaa;">${(r.category||'')} ${r.subcategory ? '> ' + r.subcategory : ''}</span></span>
+        <span class="ac-unit">${r.unit}</span>
+      </div>
+    `).join('');
+    dropdown.classList.add('open');
+    dropdown.querySelectorAll('.ac-item').forEach((el, i) => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const item = results[i];
+        descInput.value = item.description;
+        unitInput.value = item.unit;
+        fetch('/api/work-items/' + item.id + '/use', { method: 'POST' }).catch(()=>{});
+        dropdown.classList.remove('open');
+        dropdown.innerHTML = '';
+        loadQuickPicks();
+      });
+    });
+  }
+
+  // مرجع للصف الحالي عند فتح نافذة "إضافة بند جديد"
+  tr.dataset.trRef = 'tr-' + Math.random().toString(36).slice(2);
+  descInput.closest('tr').addEventListener('mousedown', () => { activeRowForModal = tr; });
+}
+
+function openAddWorkItemModal(el){
+  const tr = el.closest('tr');
+  activeRowForModal = tr;
+  const q = tr.querySelector('.wi-desc-input').value.trim();
+  document.getElementById('new-wi-desc').value = q;
+  document.getElementById('new-wi-main').value = '';
+  document.getElementById('new-wi-sub').value = '';
+  document.getElementById('new-wi-unit').value = '';
+  document.getElementById('new-wi-keywords').value = '';
+  document.getElementById('new-wi-aliases').value = '';
+  document.getElementById('add-item-modal').classList.add('open');
+}
+
+async function submitNewWorkItem(){
+  const body = {
+    description: document.getElementById('new-wi-desc').value.trim(),
+    main_category: document.getElementById('new-wi-main').value.trim(),
+    subcategory: document.getElementById('new-wi-sub').value.trim(),
+    default_unit: document.getElementById('new-wi-unit').value.trim(),
+    keywords: document.getElementById('new-wi-keywords').value.trim(),
+    aliases: document.getElementById('new-wi-aliases').value.trim(),
+  };
+  if (!body.description || !body.main_category || !body.default_unit) {
+    alert('الرجاء تعبئة الوصف والتصنيف الرئيسي والوحدة على الأقل.');
+    return;
+  }
+  try {
+    const res = await fetch('/api/work-items/new', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.ok && activeRowForModal) {
+      activeRowForModal.querySelector('.wi-desc-input').value = data.item.description;
+      activeRowForModal.querySelector('.wi-unit-input').value = data.item.default_unit;
+    }
+    closeModal('add-item-modal');
+    loadQuickPicks();
+  } catch(e) {
+    alert('تعذر إضافة البند.');
+  }
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+/* ---------------- المستخدمة مؤخرًا + الأكثر استخدامًا ---------------- */
+async function loadQuickPicks(){
+  const box = document.getElementById('quick-picks');
+  try {
+    const [recentRes, popularRes] = await Promise.all([
+      fetch('/api/work-items/recent').then(r=>r.json()),
+      fetch('/api/work-items/popular').then(r=>r.json()),
+    ]);
+    let html = '';
+    if (recentRes.length) {
+      html += '<div style="margin-bottom:6px;"><b style="color:#666;">المستخدمة مؤخرًا:</b> ' +
+        recentRes.map(r => `<span class="quick-chip" onclick='pickQuickItem(${JSON.stringify(r).replace(/'/g,"&apos;")})'>${r.description}</span>`).join(' ') + '</div>';
+    }
+    if (popularRes.length) {
+      html += '<div><b style="color:#666;">الأكثر استخدامًا:</b> ' +
+        popularRes.map(r => `<span class="quick-chip" onclick='pickQuickItem(${JSON.stringify(r).replace(/'/g,"&apos;")})'>${r.description}</span>`).join(' ') + '</div>';
+    }
+    box.innerHTML = html;
+  } catch(e) { /* silent */ }
+}
+
+function pickQuickItem(item){
+  addItemRow(item.description, '', item.unit);
+  fetch('/api/work-items/' + item.id + '/use', { method: 'POST' }).catch(()=>{});
+}
+
 // تحميل البيانات الحالية عند التعديل
 const existingItems = <%- JSON.stringify(items || []) %>;
 const existingPayments = <%- JSON.stringify(payments || []) %>;
@@ -143,6 +308,7 @@ if(existingPayments.length){
   for(let i=0;i<2;i++) addPayRow();
 }
 calcAll();
+loadQuickPicks();
 </script>
 </body>
 </html>

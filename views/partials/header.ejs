@@ -25,6 +25,9 @@
       <a href="/admin/audit-log">سجل العمليات</a>
       <a href="/admin/settings">إعدادات الاعتماد</a>
     <% } %>
+    <% if (perm.canAccessWorkItemsLibrary) { %>
+      <a href="/work-items">مكتبة بنود الأعمال</a>
+    <% } %>
   </div>
   <div class="nav-user">
     <span><b><%= currentUser.name %></b> · <%= perm.roleLabel %></span>
