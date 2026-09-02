@@ -80,29 +80,71 @@
   </div>
   <% } %>
 
-  <% if (order.status === 'approved' && (canTransferFinancial || financial || perm.isManager)) { %>
+  <% if (order.status === 'approved') { %>
   <div class="card">
-    <h3 style="margin-top:0;">التحويل للمحاسبة / الصرف</h3>
-    <% if (financial) { %>
-      <div class="stamp-box">
-        <h4>✓ تم التحويل للمحاسبة</h4>
-        <div class="s-line"><b>المحاسب:</b> <%= financial.accountant_name %></div>
-        <div class="s-line"><b>التاريخ والوقت:</b> <%= new Date(financial.transferred_at).toLocaleString('ar-SA') %></div>
-        <div class="s-line"><b>الحالة:</b> <%= financial.status === 'completed' ? 'مكتمل' : 'تم التحويل' %></div>
-        <% if (financial.notes) { %><div class="s-line"><b>ملاحظات:</b> <%= financial.notes %></div><% } %>
+    <h3 style="margin-top:0;">المحاسبة والصرف</h3>
+    <div style="margin-bottom:10px;">الحالة المالية: <span class="badge badge-fin-<%= order.financial_status %>"><%= financialStatusLabels[order.financial_status] %></span></div>
+
+    <% if (order.financial_status === 'not_sent') { %>
+      <% if (canRequestTransfer) { %>
+        <form method="POST" action="/orders/<%= order.id %>/request-transfer" onsubmit="return confirm('سيتم إرسال طلب صرف لهذا الأمر إلى المحاسبة. متابعة؟');">
+          <button type="submit" class="btn btn-primary">تحويل للمحاسبة</button>
+        </form>
+      <% } else { %>
+        <div class="empty-state">لم يُحوَّل للمحاسبة بعد.</div>
+      <% } %>
+    <% } %>
+
+    <% if (order.financial_status === 'sent_to_accounting') { %>
+      <div class="stamp-box pending">
+        <h4>بانتظار الصرف</h4>
+        <div class="s-line"><b>طلب التحويل:</b> <%= order.financial_requested_by_name %></div>
+        <div class="s-line"><b>التاريخ والوقت:</b> <%= new Date(order.financial_requested_at).toLocaleString('ar-SA') %></div>
       </div>
-    <% } else if (canTransferFinancial) { %>
-      <form method="POST" action="/orders/<%= order.id %>/transfer">
-        <div class="form-field" style="margin-bottom:10px;">
-          <label>ملاحظات (اختياري)</label>
-          <textarea name="notes" rows="2"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary">تحويل للمحاسبة / الصرف</button>
-      </form>
-    <% } else { %>
-      <div class="empty-state">لم يُحوَّل بعد — جاهز للتحويل.</div>
+      <% if (canConfirmPayment) { %>
+        <button type="button" class="btn btn-primary" style="margin-top:10px;" onclick="openModal('pay-modal')">تم الصرف</button>
+      <% } %>
+    <% } %>
+
+    <% if (order.financial_status === 'paid') { %>
+      <div class="stamp-box">
+        <h4>✓ تم الصرف</h4>
+        <div class="s-line"><b>طلب التحويل:</b> <%= order.financial_requested_by_name %> — <%= new Date(order.financial_requested_at).toLocaleString('ar-SA') %></div>
+        <div class="s-line"><b>الصرف بواسطة:</b> <%= order.financial_paid_by_name %> — <%= new Date(order.financial_paid_at).toLocaleString('ar-SA') %></div>
+        <div class="s-line"><b>المبلغ المصروف:</b> <%= Number(order.payment_amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></div>
+        <% if (order.payment_method) { %><div class="s-line"><b>طريقة الدفع:</b> <%= paymentMethodLabels[order.payment_method] %></div><% } %>
+        <% if (order.payment_reference) { %><div class="s-line"><b>رقم المرجع:</b> <%= order.payment_reference %></div><% } %>
+        <% if (order.payment_notes) { %><div class="s-line"><b>ملاحظات:</b> <%= order.payment_notes %></div><% } %>
+      </div>
     <% } %>
   </div>
+
+  <!-- نافذة تأكيد الصرف -->
+  <div class="modal-overlay" id="pay-modal">
+    <div class="modal-box">
+      <h3>تأكيد الصرف</h3>
+      <form method="POST" action="/orders/<%= order.id %>/confirm-payment">
+        <div class="form-field" style="margin-bottom:10px;"><label>المبلغ المصروف</label><input type="number" step="any" name="payment_amount" value="<%= order.grand_total %>" required></div>
+        <div class="form-field" style="margin-bottom:10px;"><label>تاريخ الصرف</label><input type="date" name="payment_date" value="<%= new Date().toISOString().slice(0,10) %>"></div>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label>طريقة الدفع</label>
+          <select name="payment_method">
+            <option value="bank_transfer">تحويل بنكي</option>
+            <option value="cash">نقدي</option>
+            <option value="cheque">شيك</option>
+            <option value="other">أخرى</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin-bottom:10px;"><label>رقم المرجع / الحوالة (اختياري)</label><input type="text" name="payment_reference"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>ملاحظات (اختياري)</label><textarea name="payment_notes" rows="2"></textarea></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('pay-modal')">إلغاء</button>
+          <button type="submit" class="btn btn-primary">تأكيد الصرف</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <% } %>
   <% } %>
 
   <div class="card">
@@ -216,5 +258,9 @@
     </ul>
   </div>
 </div>
+<script>
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+</script>
 </body>
 </html>

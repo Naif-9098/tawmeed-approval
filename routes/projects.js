@@ -15,7 +15,10 @@ const ORDER_STATUS_LABELS = {
 };
 const CERT_STATUS_LABELS = {
   draft: 'مسودة', pending_review: 'بانتظار المراجعة', approved: 'معتمد',
-  rejected: 'مرفوض', returned_for_edit: 'معاد للتعديل', transferred: 'محول للمحاسبة', paid: 'تم الصرف',
+  rejected: 'مرفوض', returned_for_edit: 'معاد للتعديل',
+};
+const FINANCIAL_STATUS_LABELS = {
+  not_sent: 'لم يُحوَّل للمحاسبة', sent_to_accounting: 'بانتظار الصرف', paid: 'تم الصرف',
 };
 
 router.use(requireLogin);
@@ -269,7 +272,7 @@ router.get('/:id', async (req, res) => {
       SELECT c.*, o.project_order_no, o.order_no, o.contractor_name, o.grand_total AS order_total,
         (o.grand_total - COALESCE((
           SELECT SUM(c2.grand_total) FROM payment_certificates c2
-          WHERE c2.order_id = o.id AND c2.status IN ('approved','transferred','paid')
+          WHERE c2.order_id = o.id AND c2.status = 'approved'
         ),0)) AS order_remaining
       FROM payment_certificates c
       JOIN orders o ON o.id = c.order_id
@@ -287,7 +290,7 @@ router.get('/:id', async (req, res) => {
     project, tab, stats, recentOrders, orders, activity, certificates, creators,
     approversList: await approversList(),
     statusLabels: PROJECT_STATUS_LABELS, orderStatusLabels: ORDER_STATUS_LABELS,
-    certStatusLabels: CERT_STATUS_LABELS,
+    certStatusLabels: CERT_STATUS_LABELS, financialStatusLabels: FINANCIAL_STATUS_LABELS,
     q: req.query,
     canManage: canManageProjects(user),
     canCreateHere: user.role !== 'accountant',

@@ -6,7 +6,10 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { canAccessProject } = require('../projectAccess');
-const { isManager, seesAllProjects, ownOrdersOnly, canCreateOrders, canTransferFinancial, canApprove, canAddWorkItem } = require('../permissions');
+const {
+  isManager, seesAllProjects, ownOrdersOnly, canCreateOrders, canApprove, canAddWorkItem,
+  canRequestTransferFor, canConfirmPayment,
+} = require('../permissions');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -16,14 +19,20 @@ const STATUS_LABELS = {
   returned_for_edit: 'معاد للتعديل',
 };
 
+const FINANCIAL_STATUS_LABELS = {
+  not_sent: 'لم يُحوَّل للمحاسبة',
+  sent_to_accounting: 'بانتظار الصرف',
+  paid: 'تم الصرف',
+};
+
+const PAYMENT_METHOD_LABELS = { bank_transfer: 'تحويل بنكي', cash: 'نقدي', cheque: 'شيك', other: 'أخرى' };
+
 const CERT_STATUS_LABELS = {
   draft: 'مسودة',
   pending_review: 'بانتظار المراجعة',
   approved: 'معتمد',
   rejected: 'مرفوض',
   returned_for_edit: 'معاد للتعديل',
-  transferred: 'محول للمحاسبة',
-  paid: 'تم الصرف',
 };
 
 async function getOrderFull(orderId) {
@@ -42,12 +51,7 @@ async function getOrderFull(orderId) {
   const assignedApprover = order.assigned_approver_id
     ? (await db.query('SELECT id, name FROM users WHERE id = $1', [order.assigned_approver_id])).rows[0]
     : null;
-  const financial = (await db.query(
-    `SELECT f.*, u.name AS accountant_name FROM financial_records f JOIN users u ON u.id = f.accountant_id
-     WHERE f.order_id = $1 ORDER BY f.transferred_at DESC LIMIT 1`,
-    [orderId]
-  )).rows[0] || null;
-  return { order, items, payments, steps, audit, creator, assignedApprover, financial };
+  return { order, items, payments, steps, audit, creator, assignedApprover };
 }
 
 /** من يمكنه عرض هذا الأمر؟ */
@@ -221,13 +225,17 @@ router.get('/:id', async (req, res) => {
   const certificates = (await db.query(
     `SELECT * FROM payment_certificates WHERE order_id = $1 ORDER BY cert_seq`, [data.order.id]
   )).rows;
+  // المبلغ "المحتسب فعليًا" من المستخلصات = مستخلصات معتمدة فقط (بغض النظر عن حالة الصرف)
   const certsSpent = certificates
-    .filter(c => ['approved', 'transferred', 'paid'].includes(c.status))
+    .filter(c => c.status === 'approved')
     .reduce((sum, c) => sum + Number(c.grand_total), 0);
   const certsRemaining = Number(data.order.grand_total) - certsSpent;
   res.render('orders/view', {
     ...data, statusLabels: STATUS_LABELS, canEdit: canEdit(data.order, user), allProjects, approversList,
-    canTransferFinancial: canTransferFinancial(user), isManager: isManager(user),
+    financialStatusLabels: FINANCIAL_STATUS_LABELS, paymentMethodLabels: PAYMENT_METHOD_LABELS,
+    canRequestTransfer: canRequestTransferFor(user, data.order.created_by),
+    canConfirmPayment: canConfirmPayment(user),
+    isManager: isManager(user),
     certificates, certsSpent, certsRemaining,
     certStatusLabels: CERT_STATUS_LABELS, canCreateCert: canViewOrder(user, data.order) && user.role !== 'accountant',
   });
@@ -374,22 +382,53 @@ router.post('/:id/assign-approver', requirePermission(isManager), async (req, re
   res.redirect(`/orders/${req.params.id}`);
 });
 
-/* -------- تحويل للمحاسبة / الصرف (المحاسب فقط، وفقط لأمر معتمد) -------- */
-router.post('/:id/transfer', requirePermission(canTransferFinancial), async (req, res) => {
+/* -------- تحويل للمحاسبة (منشئ الأمر أو مدير المشاريع — وليس المحاسب) -------- */
+router.post('/:id/request-transfer', async (req, res) => {
   const user = req.session.user;
   const orderId = req.params.id;
   const order = (await db.query('SELECT * FROM orders WHERE id=$1', [orderId])).rows[0];
   if (!order) return res.status(404).render('error', { title: 'غير موجود', message: 'أمر التعميد غير موجود.' });
+  if (!canRequestTransferFor(user, order.created_by)) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك تحويل أمر لم تُنشئه أنت.' });
+  }
   if (order.status !== 'approved') {
     return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن التحويل للمحاسبة إلا لأمر معتمد.' });
   }
+  if (order.financial_status !== 'not_sent') {
+    return res.status(400).render('error', { title: 'غير ممكن', message: 'تم تحويل هذا الأمر للمحاسبة بالفعل.' });
+  }
   await db.query(
-    `INSERT INTO financial_records (order_id, accountant_id, notes, status) VALUES ($1,$2,$3,'transferred')`,
-    [orderId, user.id, req.body.notes || null]
+    `UPDATE orders SET financial_status='sent_to_accounting',
+      financial_requested_by=$1, financial_requested_by_name=$2, financial_requested_at=now(), updated_at=now()
+     WHERE id=$3`,
+    [user.id, user.name, orderId]
+  );
+  await logAction({ orderId, action: 'تم تحويل الأمر للمحاسبة', actorId: user.id, actorName: user.name });
+  res.redirect(`/orders/${orderId}`);
+});
+
+/* -------- تم الصرف (المحاسب فقط) -------- */
+router.post('/:id/confirm-payment', requirePermission(canConfirmPayment), async (req, res) => {
+  const user = req.session.user;
+  const orderId = req.params.id;
+  const order = (await db.query('SELECT * FROM orders WHERE id=$1', [orderId])).rows[0];
+  if (!order) return res.status(404).render('error', { title: 'غير موجود', message: 'أمر التعميد غير موجود.' });
+  if (order.financial_status !== 'sent_to_accounting') {
+    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن تسجيل الصرف إلا لأمر محوّل للمحاسبة وبانتظار الصرف — وقد يكون صُرف بالفعل.' });
+  }
+  const b = req.body;
+  await db.query(
+    `UPDATE orders SET financial_status='paid',
+      financial_paid_by=$1, financial_paid_by_name=$2, financial_paid_at=now(),
+      payment_amount=$3, payment_date=$4, payment_method=$5, payment_reference=$6, payment_notes=$7,
+      updated_at=now()
+     WHERE id=$8 AND financial_status='sent_to_accounting'`,
+    [user.id, user.name, parseFloat(b.payment_amount) || order.grand_total, b.payment_date || null,
+     b.payment_method || null, b.payment_reference || null, b.payment_notes || null, orderId]
   );
   await logAction({
-    orderId, action: 'تم التحويل للمحاسبة / الصرف', actorId: user.id, actorName: user.name,
-    details: req.body.notes ? `ملاحظات: ${req.body.notes}` : null,
+    orderId, action: 'تم صرف الأمر', actorId: user.id, actorName: user.name,
+    details: `المبلغ: ${b.payment_amount || order.grand_total} — الطريقة: ${b.payment_method || '—'}${b.payment_reference ? ' — مرجع: ' + b.payment_reference : ''}`,
   });
   res.redirect(`/orders/${orderId}`);
 });

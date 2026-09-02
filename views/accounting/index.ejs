@@ -1,0 +1,55 @@
+<%- include('../partials/header', { title: 'طلبات الصرف' }) %>
+<div class="wrap">
+  <h2 class="page-title">طلبات الصرف</h2>
+  <p style="color:#777; font-size:13px; margin-top:-10px;">
+    أوامر التعميد والمستخلصات المعتمدة التي طُلب تحويلها للمحاسبة، من جميع المشاريع.
+  </p>
+
+  <div class="card">
+    <form method="GET" action="/accounting" class="filter-bar">
+      <input type="text" name="q" placeholder="ابحث برقم الأمر، رقم المستخلص، أو المقاول..." value="<%= q.q || '' %>">
+      <select name="status">
+        <option value="sent_to_accounting" <%= statusFilter==='sent_to_accounting'?'selected':'' %>>بانتظار الصرف فقط</option>
+        <option value="paid" <%= statusFilter==='paid'?'selected':'' %>>تم الصرف فقط</option>
+        <option value="all" <%= statusFilter==='all'?'selected':'' %>>الكل</option>
+      </select>
+      <button type="submit" class="btn btn-ghost btn-sm">تصفية</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <% if (rows.length === 0) { %>
+      <div class="empty-state">لا توجد طلبات صرف مطابقة.</div>
+    <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>النوع</th><th>رقم أمر التعميد</th><th>رقم المستخلص</th><th>المشروع</th><th>المقاول</th>
+          <th>الوصف</th><th>المبلغ</th><th>طلب التحويل</th><th>تاريخ الطلب</th><th>الحالة</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(r => { %>
+        <tr>
+          <td><%= r.doc_type === 'order' ? 'أمر تعميد' : 'مستخلص' %></td>
+          <td class="mono"><%= r.project_order_no || r.order_no %></td>
+          <td class="mono"><%= r.cert_no || '—' %></td>
+          <td><%= r.project_name || '—' %></td>
+          <td><%= r.contractor_name || '—' %></td>
+          <td style="text-align:right; font-size:12px;"><%= r.description || '—' %></td>
+          <td class="mono"><%= Number(r.amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
+          <td><%= r.financial_requested_by_name || '—' %></td>
+          <td class="mono" style="font-size:11px;"><%= r.financial_requested_at ? new Date(r.financial_requested_at).toLocaleString('ar-SA') : '—' %></td>
+          <td><span class="badge badge-fin-<%= r.financial_status %>"><%= financialStatusLabels[r.financial_status] %></span></td>
+          <td>
+            <a href="<%= r.doc_type === 'order' ? '/orders/' + r.id : '/certificates/' + r.id %>" class="btn btn-ghost btn-sm">فتح</a>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+</body>
+</html>

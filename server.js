@@ -38,6 +38,7 @@ app.use('/admin', require('./routes/admin'));
 app.use('/verify', require('./routes/verify'));
 app.use('/', require('./routes/certificates'));
 app.use('/', require('./routes/workItems'));
+app.use('/', require('./routes/accounting'));
 
 app.get('/', (req, res) => {
   if (!req.session.user) return res.redirect('/login');

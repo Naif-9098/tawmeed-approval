@@ -49,6 +49,22 @@ function canTransferFinancial(user) {
   return user.role === 'accountant';
 }
 
+// من يطلب "تحويل للمحاسبة" لمستند بعينه؟ منشئ المستند نفسه (Ownership)، أو مدير المشاريع
+// (وصول كامل كالمعتاد). المحاسب مستثنى دائمًا — فهو الجهة المستقبلة للطلب وليس المرسلة.
+function canRequestTransferFor(user, createdByUserId) {
+  return isManager(user) || user.id === createdByUserId;
+}
+
+// من يؤكد "تم الصرف" فعليًا؟ المحاسب فقط.
+function canConfirmPayment(user) {
+  return user.role === 'accountant';
+}
+
+// من يرى صفحة "طلبات الصرف" الإدارية؟ المحاسب (يستقبل الطلبات) ومدير المشاريع (إشراف).
+function canViewAccountingRequests(user) {
+  return user.role === 'accountant' || isManager(user);
+}
+
 function canCreateCertificates(user) {
   return user.role !== 'accountant';
 }
@@ -79,6 +95,7 @@ function roleLabel(role) {
 module.exports = {
   ROLE_LABELS, isManager, seesAllProjects, ownOrdersOnly,
   canCreateOrders, canManageUsers, canManageProjects, canApprove,
-  canTransferFinancial, canCreateCertificates, canManageWorkItems, canAddWorkItem,
+  canTransferFinancial, canRequestTransferFor, canConfirmPayment, canViewAccountingRequests,
+  canCreateCertificates, canManageWorkItems, canAddWorkItem,
   canEditWorkItem, canAccessWorkItemsLibrary, roleLabel,
 };

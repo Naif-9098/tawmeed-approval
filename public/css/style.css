@@ -155,3 +155,8 @@ tbody tr:hover{background:#FFFBF3;}
 .ac-empty{padding:10px; color:#999; font-size:12px; text-align:center;}
 .quick-chip{display:inline-block; background:#F5F5F5; border:1px solid var(--line-soft); border-radius:20px; padding:3px 10px; margin:2px; font-size:11.5px; cursor:pointer; color:#444;}
 .quick-chip:hover{background:#FFF3DE; border-color:var(--amber); color:var(--amber-dark);}
+
+/* ---------- Financial status badges (separate from approval status) ---------- */
+.badge-fin-not_sent{background:#EAEAEA; color:#666;}
+.badge-fin-sent_to_accounting{background:#FFF3DE; color:var(--amber-dark);}
+.badge-fin-paid{background:#E4F5EB; color:var(--good);}
