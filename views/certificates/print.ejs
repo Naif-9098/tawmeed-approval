@@ -48,7 +48,7 @@
       <div style="text-align:center; font-size:11px; color:#666;">PAYMENT CERTIFICATE</div>
       <h2>مستخلص أعمال</h2>
     </div>
-    <div class="status-line">الحالة: <%= statusLabels[cert.status] %></div>
+    <div class="status-line">الحالة: <%= statusLabels[cert.status] %> — الحالة المالية: <%= financialStatusLabels[cert.financial_status] %></div>
 
     <div class="info-grid">
       <div class="lbl">التاريخ:</div><div class="val mono"><%= cert.cert_date ? new Date(cert.cert_date).toISOString().slice(0,10) : '' %></div>
@@ -93,7 +93,7 @@
 
     <div class="sig-area">
       <div class="sig-cell">
-        <% if (cert.status === 'approved' || cert.status === 'transferred' || cert.status === 'paid') { %>
+        <% if (cert.status === 'approved') { %>
           <div class="sig-approved">
             <div class="tick">✓ معتمد إلكترونيًا</div>
             <div class="line"><b>الاسم:</b> <%= cert.final_approved_by_name %></div>

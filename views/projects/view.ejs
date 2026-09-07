@@ -187,7 +187,7 @@
         <div class="empty-state">لا توجد مستخلصات مطابقة.</div>
       <% } else { %>
       <table>
-        <thead><tr><th>رقم المستخلص</th><th>رقم أمر التعميد</th><th>المقاول</th><th>القيمة</th><th>التاريخ</th><th>الحالة</th><th>المبلغ المتبقي من الأمر</th><th></th></tr></thead>
+        <thead><tr><th>رقم المستخلص</th><th>رقم أمر التعميد</th><th>المقاول</th><th>القيمة</th><th>التاريخ</th><th>حالة الاعتماد</th><th>الحالة المالية</th><th>المبلغ المتبقي من الأمر</th><th></th></tr></thead>
         <tbody>
           <% certificates.forEach(c => { %>
           <tr>
@@ -197,6 +197,7 @@
             <td class="mono"><%= Number(c.grand_total).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
             <td class="mono" style="font-size:11px;"><%= c.cert_date ? new Date(c.cert_date).toISOString().slice(0,10) : '—' %></td>
             <td><span class="badge badge-<%= c.status %>"><%= certStatusLabels[c.status] %></span></td>
+            <td><span class="badge badge-fin-<%= c.financial_status %>"><%= financialStatusLabels[c.financial_status] %></span></td>
             <td class="mono"><%= Number(c.order_remaining).toLocaleString('en-US',{minimumFractionDigits:2}) %></td>
             <td><a href="/certificates/<%= c.id %>" class="btn btn-ghost btn-sm">عرض</a></td>
           </tr>

@@ -28,6 +28,9 @@
     <% if (perm.canAccessWorkItemsLibrary) { %>
       <a href="/work-items">مكتبة بنود الأعمال</a>
     <% } %>
+    <% if (perm.canViewAccountingRequests) { %>
+      <a href="/accounting">طلبات الصرف</a>
+    <% } %>
   </div>
   <div class="nav-user">
     <span><b><%= currentUser.name %></b> · <%= perm.roleLabel %></span>

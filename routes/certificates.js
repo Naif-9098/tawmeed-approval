@@ -4,7 +4,7 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { canAccessProject } = require('../projectAccess');
-const { isManager, seesAllProjects, ownOrdersOnly, canApprove, canCreateCertificates, canTransferFinancial } = require('../permissions');
+const { isManager, seesAllProjects, canApprove, canCreateCertificates, canRequestTransferFor, canConfirmPayment } = require('../permissions');
 const { getSetting } = require('../settings');
 
 const STATUS_LABELS = {
@@ -13,10 +13,14 @@ const STATUS_LABELS = {
   approved: 'معتمد',
   rejected: 'مرفوض',
   returned_for_edit: 'معاد للتعديل',
-  transferred: 'محول للمحاسبة',
+};
+const FINANCIAL_STATUS_LABELS = {
+  not_sent: 'لم يُحوَّل للمحاسبة',
+  sent_to_accounting: 'بانتظار الصرف',
   paid: 'تم الصرف',
 };
 const PAY_METHOD_LABELS = { cash: 'نقدًا', transfer: 'تحويل', retention: 'ضمان أعمال' };
+const PAYMENT_METHOD_LABELS = { bank_transfer: 'تحويل بنكي', cash: 'نقدي', cheque: 'شيك', other: 'أخرى' };
 
 router.use(requireLogin);
 
@@ -44,14 +48,14 @@ async function getCertFull(certId) {
   return { cert, order, items, creator };
 }
 
-/** مجموع المستخلصات "المحتسبة فعليًا" لأمر معيّن (لا تُحسب المسودات أو المرفوضة أو المعادة) */
+/** مجموع المستخلصات "المحتسبة فعليًا" لأمر معيّن — أي مستخلص معتمد (بغض النظر عن حالة الصرف) */
 async function getSpentForOrder(orderId, excludeCertId) {
   const params = [orderId];
   let extra = '';
   if (excludeCertId) { params.push(excludeCertId); extra = ` AND id != $${params.length}`; }
   const r = await db.query(
     `SELECT COALESCE(SUM(grand_total),0) AS spent FROM payment_certificates
-     WHERE order_id = $1 AND status IN ('approved','transferred','paid') ${extra}`,
+     WHERE order_id = $1 AND status = 'approved' ${extra}`,
     params
   );
   return Number(r.rows[0].spent);
@@ -150,9 +154,11 @@ router.get('/certificates/:id', async (req, res) => {
     [data.order.id, data.cert.cert_no]
   )).rows;
   res.render('certificates/view', {
-    ...data, statusLabels: STATUS_LABELS, payMethodLabels: PAY_METHOD_LABELS,
+    ...data, statusLabels: STATUS_LABELS, financialStatusLabels: FINANCIAL_STATUS_LABELS,
+    paymentMethodLabels: PAYMENT_METHOD_LABELS, payMethodLabels: PAY_METHOD_LABELS,
     canEdit: canEditCert(data.cert, user), canApprove: canApprove(user),
-    canTransferFinancial: canTransferFinancial(user), spent, remaining, audit,
+    canRequestTransfer: canRequestTransferFor(user, data.cert.created_by),
+    canConfirmPayment: canConfirmPayment(user), spent, remaining, audit,
   });
 });
 
@@ -266,28 +272,54 @@ router.post('/certificates/:id/return', requirePermission(canApprove), async (re
   res.redirect(`/certificates/${certId}`);
 });
 
-/* ---------------- تحويل للمحاسبة / صرف (المحاسب فقط) ---------------- */
-router.post('/certificates/:id/transfer', requirePermission(canTransferFinancial), async (req, res) => {
+/* ---------------- تحويل للمحاسبة (منشئ المستخلص أو مدير المشاريع — وليس المحاسب) ---------------- */
+router.post('/certificates/:id/request-transfer', async (req, res) => {
   const user = req.session.user;
   const certId = req.params.id;
   const cert = (await db.query('SELECT * FROM payment_certificates WHERE id = $1', [certId])).rows[0];
-  if (!cert || cert.status !== 'approved') {
-    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن التحويل إلا لمستخلص معتمد.' });
+  if (!cert) return res.status(404).render('error', { title: 'غير موجود', message: 'المستخلص غير موجود.' });
+  if (!canRequestTransferFor(user, cert.created_by)) {
+    return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك تحويل مستخلص لم تُنشئه أنت.' });
   }
-  await db.query(`UPDATE payment_certificates SET status='transferred', transferred_by_name=$1, transferred_at=now(), updated_at=now() WHERE id=$2`, [user.name, certId]);
+  if (cert.status !== 'approved') {
+    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن التحويل للمحاسبة إلا لمستخلص معتمد.' });
+  }
+  if (cert.financial_status !== 'not_sent') {
+    return res.status(400).render('error', { title: 'غير ممكن', message: 'تم تحويل هذا المستخلص للمحاسبة بالفعل.' });
+  }
+  await db.query(
+    `UPDATE payment_certificates SET financial_status='sent_to_accounting',
+      financial_requested_by=$1, financial_requested_by_name=$2, financial_requested_at=now(), updated_at=now()
+     WHERE id=$3`,
+    [user.id, user.name, certId]
+  );
   await logAction({ orderId: cert.order_id, action: 'تم تحويل المستخلص للمحاسبة', actorId: user.id, actorName: user.name, details: `رقم المستخلص: ${cert.cert_no}` });
   res.redirect(`/certificates/${certId}`);
 });
 
-router.post('/certificates/:id/pay', requirePermission(canTransferFinancial), async (req, res) => {
+/* ---------------- تم الصرف (المحاسب فقط) ---------------- */
+router.post('/certificates/:id/confirm-payment', requirePermission(canConfirmPayment), async (req, res) => {
   const user = req.session.user;
   const certId = req.params.id;
   const cert = (await db.query('SELECT * FROM payment_certificates WHERE id = $1', [certId])).rows[0];
-  if (!cert || cert.status !== 'transferred') {
-    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن تسجيل الصرف إلا لمستخلص محوّل للمحاسبة.' });
+  if (!cert) return res.status(404).render('error', { title: 'غير موجود', message: 'المستخلص غير موجود.' });
+  if (cert.financial_status !== 'sent_to_accounting') {
+    return res.status(400).render('error', { title: 'غير ممكن', message: 'لا يمكن تسجيل الصرف إلا لمستخلص محوّل للمحاسبة وبانتظار الصرف — وقد يكون صُرف بالفعل.' });
   }
-  await db.query(`UPDATE payment_certificates SET status='paid', paid_at=now(), updated_at=now() WHERE id=$1`, [certId]);
-  await logAction({ orderId: cert.order_id, action: 'تم صرف المستخلص', actorId: user.id, actorName: user.name, details: `رقم المستخلص: ${cert.cert_no}` });
+  const b = req.body;
+  await db.query(
+    `UPDATE payment_certificates SET financial_status='paid',
+      financial_paid_by=$1, financial_paid_by_name=$2, financial_paid_at=now(),
+      payment_amount=$3, payment_date=$4, payout_method=$5, payment_reference=$6, payment_notes=$7,
+      updated_at=now()
+     WHERE id=$8 AND financial_status='sent_to_accounting'`,
+    [user.id, user.name, parseFloat(b.payment_amount) || cert.grand_total, b.payment_date || null,
+     b.payout_method || null, b.payment_reference || null, b.payment_notes || null, certId]
+  );
+  await logAction({
+    orderId: cert.order_id, action: 'تم صرف المستخلص', actorId: user.id, actorName: user.name,
+    details: `رقم المستخلص: ${cert.cert_no} — المبلغ: ${b.payment_amount || cert.grand_total} — الطريقة: ${b.payout_method || '—'}${b.payment_reference ? ' — مرجع: ' + b.payment_reference : ''}`,
+  });
   res.redirect(`/certificates/${certId}`);
 });
 
@@ -301,7 +333,10 @@ router.get('/certificates/:id/print', async (req, res) => {
   }
   const spent = await getSpentForOrder(data.order.id, data.cert.id);
   const remaining = Number(data.order.grand_total) - spent;
-  res.render('certificates/print', { ...data, statusLabels: STATUS_LABELS, payMethodLabels: PAY_METHOD_LABELS, spent, remaining });
+  res.render('certificates/print', {
+    ...data, statusLabels: STATUS_LABELS, financialStatusLabels: FINANCIAL_STATUS_LABELS,
+    payMethodLabels: PAY_METHOD_LABELS, spent, remaining,
+  });
 });
 
 module.exports = router;

@@ -82,20 +82,69 @@
   </div>
   <% } %>
 
-  <% if (cert.status === 'approved' && canTransferFinancial) { %>
+  <% if (cert.status === 'approved') { %>
   <div class="card">
-    <h3 style="margin-top:0;">تحويل للمحاسبة</h3>
-    <form method="POST" action="/certificates/<%= cert.id %>/transfer">
-      <button type="submit" class="btn btn-primary">تحويل للمحاسبة</button>
-    </form>
+    <h3 style="margin-top:0;">المحاسبة والصرف</h3>
+    <div style="margin-bottom:10px;">الحالة المالية: <span class="badge badge-fin-<%= cert.financial_status %>"><%= financialStatusLabels[cert.financial_status] %></span></div>
+
+    <% if (cert.financial_status === 'not_sent') { %>
+      <% if (canRequestTransfer) { %>
+        <form method="POST" action="/certificates/<%= cert.id %>/request-transfer" onsubmit="return confirm('سيتم إرسال طلب صرف لهذا المستخلص إلى المحاسبة. متابعة؟');">
+          <button type="submit" class="btn btn-primary">تحويل للمحاسبة</button>
+        </form>
+      <% } else { %>
+        <div class="empty-state">لم يُحوَّل للمحاسبة بعد.</div>
+      <% } %>
+    <% } %>
+
+    <% if (cert.financial_status === 'sent_to_accounting') { %>
+      <div class="stamp-box pending">
+        <h4>بانتظار الصرف</h4>
+        <div class="s-line"><b>طلب التحويل:</b> <%= cert.financial_requested_by_name %></div>
+        <div class="s-line"><b>التاريخ والوقت:</b> <%= new Date(cert.financial_requested_at).toLocaleString('ar-SA') %></div>
+      </div>
+      <% if (canConfirmPayment) { %>
+        <button type="button" class="btn btn-primary" style="margin-top:10px;" onclick="openModal('pay-modal')">تم الصرف</button>
+      <% } %>
+    <% } %>
+
+    <% if (cert.financial_status === 'paid') { %>
+      <div class="stamp-box">
+        <h4>✓ تم الصرف</h4>
+        <div class="s-line"><b>طلب التحويل:</b> <%= cert.financial_requested_by_name %> — <%= new Date(cert.financial_requested_at).toLocaleString('ar-SA') %></div>
+        <div class="s-line"><b>الصرف بواسطة:</b> <%= cert.financial_paid_by_name %> — <%= new Date(cert.financial_paid_at).toLocaleString('ar-SA') %></div>
+        <div class="s-line"><b>المبلغ المصروف:</b> <%= Number(cert.payment_amount).toLocaleString('en-US',{minimumFractionDigits:2}) %></div>
+        <% if (cert.payout_method) { %><div class="s-line"><b>طريقة الدفع:</b> <%= paymentMethodLabels[cert.payout_method] %></div><% } %>
+        <% if (cert.payment_reference) { %><div class="s-line"><b>رقم المرجع:</b> <%= cert.payment_reference %></div><% } %>
+        <% if (cert.payment_notes) { %><div class="s-line"><b>ملاحظات:</b> <%= cert.payment_notes %></div><% } %>
+      </div>
+    <% } %>
   </div>
-  <% } %>
-  <% if (cert.status === 'transferred' && canTransferFinancial) { %>
-  <div class="card">
-    <h3 style="margin-top:0;">تسجيل الصرف</h3>
-    <form method="POST" action="/certificates/<%= cert.id %>/pay">
-      <button type="submit" class="btn btn-primary">تأكيد الصرف</button>
-    </form>
+
+  <!-- نافذة تأكيد الصرف -->
+  <div class="modal-overlay" id="pay-modal">
+    <div class="modal-box">
+      <h3>تأكيد الصرف</h3>
+      <form method="POST" action="/certificates/<%= cert.id %>/confirm-payment">
+        <div class="form-field" style="margin-bottom:10px;"><label>المبلغ المصروف</label><input type="number" step="any" name="payment_amount" value="<%= cert.grand_total %>" required></div>
+        <div class="form-field" style="margin-bottom:10px;"><label>تاريخ الصرف</label><input type="date" name="payment_date" value="<%= new Date().toISOString().slice(0,10) %>"></div>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label>طريقة الدفع</label>
+          <select name="payout_method">
+            <option value="bank_transfer">تحويل بنكي</option>
+            <option value="cash">نقدي</option>
+            <option value="cheque">شيك</option>
+            <option value="other">أخرى</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin-bottom:10px;"><label>رقم المرجع / الحوالة (اختياري)</label><input type="text" name="payment_reference"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>ملاحظات (اختياري)</label><textarea name="payment_notes" rows="2"></textarea></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('pay-modal')">إلغاء</button>
+          <button type="submit" class="btn btn-primary">تأكيد الصرف</button>
+        </div>
+      </form>
+    </div>
   </div>
   <% } %>
 

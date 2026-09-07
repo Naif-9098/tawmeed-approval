@@ -9,7 +9,8 @@
     "migrate:projects": "node migrate_projects.js",
     "migrate:roles": "node migrate_roles.js",
     "migrate:certificates": "node migrate_certificates.js",
-    "migrate:work-items": "node migrate_work_items.js"
+    "migrate:work-items": "node migrate_work_items.js",
+    "migrate:financial": "node migrate_financial_workflow.js"
   },
   "engines": {
     "node": ">=18.0.0"
