@@ -4,39 +4,64 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= typeof title !== 'undefined' ? title + ' — نظام أوامر التعميد' : 'نظام أوامر التعميد' %></title>
+<link rel="icon" href="/rateim-logo.svg">
 <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-<% if (typeof currentUser !== 'undefined' && currentUser) { %>
-<div class="topbar no-print">
-  <div class="brand">
-    <div class="mark">أت</div>
-    <h1>نظام أوامر التعميد</h1>
-  </div>
-  <div class="nav-links">
-    <a href="/projects">المشاريع</a>
-    <a href="/orders">أوامري</a>
-    <% if (perm.canApprove) { %>
-      <a href="/approvals">طلبات الاعتماد</a>
-    <% } %>
-    <% if (perm.isManager) { %>
-      <a href="/admin/orders">كل الأوامر</a>
-      <a href="/admin/users">المستخدمون</a>
-      <a href="/admin/audit-log">سجل العمليات</a>
-      <a href="/admin/settings">إعدادات الاعتماد</a>
-    <% } %>
-    <% if (perm.canAccessWorkItemsLibrary) { %>
-      <a href="/work-items">مكتبة بنود الأعمال</a>
-    <% } %>
-    <% if (perm.canViewAccountingRequests) { %>
-      <a href="/accounting">طلبات الصرف</a>
-    <% } %>
-  </div>
-  <div class="nav-user">
-    <span><b><%= currentUser.name %></b> · <%= perm.roleLabel %></span>
-    <form method="POST" action="/logout" style="margin:0;">
-      <button type="submit" class="btn btn-ghost btn-sm" style="color:#fff; border-color:#48597A;">خروج</button>
-    </form>
-  </div>
+<% const loggedIn = typeof currentUser !== 'undefined' && currentUser; %>
+<body class="<%= loggedIn ? 'has-sidebar' : '' %>">
+<% if (loggedIn) {
+  const path = (typeof currentPath !== 'undefined' ? currentPath : '').split('?')[0];
+  const on = (prefixes) => prefixes.some((p) => path === p || path.startsWith(p + '/')) ? ' active' : '';
+  const icon = (d) => '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + d + '</svg>';
+  const I = {
+    projects: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+    orders: '<path d="M6.5 3.5h8l4 4v13h-12z"/><path d="M14.5 3.5v4h4M9.5 12h6M9.5 16h6"/>',
+    approvals: '<circle cx="12" cy="12" r="8"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    accounting: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M3.5 10h17M7.5 14.5h3"/>',
+    items: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>',
+    all: '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+    users: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7M16 5.6a3 3 0 0 1 0 5.8M18 14.6c1.4.6 2.3 2 2.6 4.4"/>',
+    perms: '<path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6"/>',
+    audit: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+  };
+%>
+<div class="app-topbar no-print">
+  <button type="button" class="sb-toggle" id="sbToggle" aria-label="فتح القائمة" aria-controls="appSidebar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg></button>
+  <b>نظام أوامر التعميد</b>
+  <img src="/rateim-logo.svg" alt="RATEIM">
 </div>
+<aside class="sidebar no-print" id="appSidebar">
+  <div class="side-brand">
+    <img src="/rateim-logo.svg" alt="RATEIM">
+    <div><b>نظام أوامر التعميد</b><small>RATEIM</small></div>
+  </div>
+  <nav class="side-nav">
+    <div class="nav-group-label">العمل</div>
+    <a class="side-link<%= on(['/projects']) %>" href="/projects"><%- icon(I.projects) %><span>المشاريع</span></a>
+    <a class="side-link<%= on(['/orders']) %>" href="/orders"><%- icon(I.orders) %><span>أوامري</span></a>
+    <% if (perm.canApprove) { %><a class="side-link<%= on(['/approvals']) %>" href="/approvals"><%- icon(I.approvals) %><span>طلبات الاعتماد</span></a><% } %>
+    <% if (perm.canViewAccountingRequests || perm.canAccessWorkItemsLibrary) { %><div class="nav-group-label">المحاسبة والمكتبة</div><% } %>
+    <% if (perm.canViewAccountingRequests) { %><a class="side-link<%= on(['/accounting']) %>" href="/accounting"><%- icon(I.accounting) %><span>طلبات الصرف</span></a><% } %>
+    <% if (perm.canAccessWorkItemsLibrary) { %><a class="side-link<%= on(['/work-items']) %>" href="/work-items"><%- icon(I.items) %><span>مكتبة بنود الأعمال</span></a><% } %>
+    <% if (perm.canListAllOrders || perm.canManageUsers || perm.canManagePermissions || perm.canManageSettings || perm.canViewAuditLog) { %><div class="nav-group-label">الإدارة</div><% } %>
+    <% if (perm.canListAllOrders) { %><a class="side-link<%= on(['/admin/orders']) %>" href="/admin/orders"><%- icon(I.all) %><span>كل الأوامر</span></a><% } %>
+    <% if (perm.canManageUsers) { %><a class="side-link<%= on(['/admin/users']) %>" href="/admin/users"><%- icon(I.users) %><span>المستخدمون</span></a><% } %>
+    <% if (perm.canManagePermissions) { %><a class="side-link<%= on(['/permissions']) %>" href="/permissions"><%- icon(I.perms) %><span>الإعدادات والصلاحيات</span></a><% } %>
+    <% if (perm.canManageSettings) { %><a class="side-link<%= on(['/admin/settings']) %>" href="/admin/settings"><%- icon(I.settings) %><span>إعدادات الاعتماد</span></a><% } %>
+    <% if (perm.canViewAuditLog) { %><a class="side-link<%= on(['/admin/audit-log']) %>" href="/admin/audit-log"><%- icon(I.audit) %><span>سجل العمليات</span></a><% } %>
+  </nav>
+  <div class="side-user">
+    <b><%= currentUser.name %></b>
+    <small><%= perm.roleLabel %></small>
+    <form method="POST" action="/logout" style="margin:0;"><button type="submit" class="btn btn-ghost btn-sm">تسجيل الخروج</button></form>
+  </div>
+</aside>
+<div class="sb-scrim no-print" id="sbScrim" hidden></div>
+<script>
+(function(){var b=document.body,t=document.getElementById('sbToggle'),s=document.getElementById('sbScrim');
+function set(o){b.classList.toggle('sb-open',o);s.hidden=!o;t.setAttribute('aria-expanded',o?'true':'false');}
+t.addEventListener('click',function(){set(!b.classList.contains('sb-open'));});s.addEventListener('click',function(){set(false);});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')set(false);});})();
+</script>
 <% } %>

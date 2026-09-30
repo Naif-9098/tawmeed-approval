@@ -7,9 +7,11 @@ const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { canAccessProject } = require('../projectAccess');
 const {
-  isManager, seesAllProjects, ownOrdersOnly, canCreateOrders, canApprove, canAddWorkItem,
+  canViewAllOrders, canCreateOrders, canApproveOrders, canAddWorkItem, canEditOwnOrders, canEditAllOrders,
+  canListAllOrders, canMoveOrders, canAssignApprover, canCreateCertificates,
   canRequestTransferFor, canConfirmPayment,
 } = require('../permissions');
+const engine = require('../permission_engine');
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -56,10 +58,10 @@ async function getOrderFull(orderId) {
 
 /** من يمكنه عرض هذا الأمر؟ */
 function canViewOrder(user, order) {
-  if (seesAllProjects(user)) return true; // admin, projects_manager, technical_office, accountant
+  if (canViewAllOrders(user)) return true; // ORDER_VIEW_ALL
   if (order.created_by === user.id) return true;
   // معتمد مسموح له بمراجعة هذا الأمر (مُسنَد إليه تحديدًا، أو غير مُسنَد لأحد بعد)
-  if (canApprove(user) && (!order.assigned_approver_id || order.assigned_approver_id === user.id)) return true;
+  if (canApproveOrders(user) && (!order.assigned_approver_id || order.assigned_approver_id === user.id)) return true;
   return false;
 }
 
@@ -67,18 +69,16 @@ function canViewOrder(user, order) {
 function canEdit(order, user) {
   if (!order || !user) return false;
   if (!(order.status === 'draft' || order.status === 'returned_for_edit')) return false;
-  if (isManager(user)) return true;
-  if (user.role === 'technical_office') return true; // مسموح له بتعديل أي أمر قابل للتعديل
-  return order.created_by === user.id;
+  if (canEditAllOrders(user)) return true; // ORDER_EDIT_ALL
+  return canEditOwnOrders(user) && order.created_by === user.id; // ORDER_EDIT_OWN + الملكية
 }
 
 /** من يمكنه إرسال هذا الأمر للاعتماد؟ (نفس منطق التعديل تقريبًا) */
 function canSubmit(order, user) {
   if (!order || !user) return false;
   if (order.status !== 'draft' && order.status !== 'returned_for_edit') return false;
-  if (isManager(user)) return true;
-  if (user.role === 'technical_office') return true;
-  return order.created_by === user.id;
+  if (canEditAllOrders(user)) return true;
+  return canEditOwnOrders(user) && order.created_by === user.id;
 }
 
 router.use(requireLogin);
@@ -87,7 +87,7 @@ router.use(requireLogin);
 router.get('/', async (req, res) => {
   const user = req.session.user;
   let rows;
-  if (isManager(user)) {
+  if (canListAllOrders(user)) {
     rows = (await db.query(
       `SELECT o.*, u.name AS creator_name, p.name AS project_name_rel, p.code AS project_code
        FROM orders o JOIN users u ON u.id = o.created_by LEFT JOIN projects p ON p.id = o.project_id
@@ -218,9 +218,12 @@ router.get('/:id', async (req, res) => {
   }
   let allProjects = [];
   let approversList = [];
-  if (isManager(user)) {
+  if (canMoveOrders(user)) {
     allProjects = (await db.query(`SELECT id, name, code FROM projects WHERE status != 'archived' ORDER BY name`)).rows;
-    approversList = (await db.query(`SELECT id, name FROM users WHERE can_approve = true AND active = true ORDER BY name`)).rows;
+  }
+  if (canAssignApprover(user)) {
+    // من يملك «اعتماد أوامر التعميد» فعلياً (قالب + استثناءات)، لا علم can_approve القديم
+    approversList = await engine.usersWithPermission(db, 'ORDER_APPROVE');
   }
   const certificates = (await db.query(
     `SELECT * FROM payment_certificates WHERE order_id = $1 ORDER BY cert_seq`, [data.order.id]
@@ -235,9 +238,9 @@ router.get('/:id', async (req, res) => {
     financialStatusLabels: FINANCIAL_STATUS_LABELS, paymentMethodLabels: PAYMENT_METHOD_LABELS,
     canRequestTransfer: canRequestTransferFor(user, data.order.created_by),
     canConfirmPayment: canConfirmPayment(user),
-    isManager: isManager(user),
+    canMoveOrders: canMoveOrders(user), canAssignApprover: canAssignApprover(user),
     certificates, certsSpent, certsRemaining,
-    certStatusLabels: CERT_STATUS_LABELS, canCreateCert: canViewOrder(user, data.order) && user.role !== 'accountant',
+    certStatusLabels: CERT_STATUS_LABELS, canCreateCert: canViewOrder(user, data.order) && canCreateCertificates(user),
   });
 });
 
@@ -329,7 +332,7 @@ router.post('/:id/submit', async (req, res) => {
 });
 
 /* -------- نقل أمر لمشروع آخر (مدير المشاريع فقط) -------- */
-router.post('/:id/move', requirePermission(isManager), async (req, res) => {
+router.post('/:id/move', requirePermission(canMoveOrders), async (req, res) => {
   const user = req.session.user;
   const orderId = req.params.id;
   const newProjectId = parseInt(req.body.project_id, 10);
@@ -366,7 +369,7 @@ router.post('/:id/move', requirePermission(isManager), async (req, res) => {
 });
 
 /* -------- تعيين / تغيير المعتمد المسؤول عن أمر معين (مدير المشاريع فقط) -------- */
-router.post('/:id/assign-approver', requirePermission(isManager), async (req, res) => {
+router.post('/:id/assign-approver', requirePermission(canAssignApprover), async (req, res) => {
   const user = req.session.user;
   const approverId = req.body.approver_id || null;
   await db.query('UPDATE orders SET assigned_approver_id = $1, updated_at = now() WHERE id = $2', [approverId, req.params.id]);

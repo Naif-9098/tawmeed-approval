@@ -1,0 +1,18 @@
+<%- include('../partials/header', { title: 'مراجعة القالب' }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <div class="card">
+    <h3 style="margin-top:0;">مراجعة تعديل القالب «<%= name %>» — يؤثر فوراً على <%= role.userCount %> مستخدم</h3>
+    <% if (name !== role.name) { %><div class="pm-change" style="font-weight:700;">الاسم: «<%= role.name %>» ← «<%= name %>»</div><% } %>
+    <% if (!changes.length) { %><div class="empty-state">لا تغيير في صلاحيات القالب.</div><% } %>
+    <% changes.forEach(c => { %><div class="pm-change <%= c.to ? 'grant' : 'revoke' %> <%= c.p.danger ? 'danger' : '' %>"><%= c.p.label %><% if (c.p.danger) { %><span class="pm-tag">حساسة</span><% } %></div><% }) %>
+    <% if (dangerGrants.length) { %><div class="pm-warn">تنبيه: سيحصل كل المسند إليهم (<%= role.userCount %>) على <%= dangerGrants.length %> صلاحية حساسة.</div><% } %>
+    <form method="POST" action="/permissions/roles/<%= role.code %>/save" style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;" <% if (dangerGrants.length) { %>onsubmit="return confirm('تأكيد منح صلاحيات حساسة لكل المسند إليهم هذا القالب؟');"<% } %>>
+      <input type="hidden" name="name" value="<%= name %>"><input type="hidden" name="description" value="<%= description %>"><input type="hidden" name="keys" value="<%= keys.join(',') %>">
+      <a href="/permissions/roles/<%= role.code %>" class="btn btn-ghost">رجوع للتعديل</a>
+      <button class="btn btn-primary">تأكيد وحفظ القالب</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

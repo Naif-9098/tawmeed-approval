@@ -12,7 +12,7 @@
       <div class="form-field">
         <label>الدور (Role)</label>
         <select name="role" id="role-select" onchange="toggleProjectsField()">
-          <% roleOptions.forEach(r => { %><option value="<%= r.value %>"><%= r.label %></option><% }) %>
+          <% roleOptions.forEach(r => { %><option value="<%= r.value %>" data-sees-all="<%= r.sees_all ? 1 : 0 %>"><%= r.label %></option><% }) %>
         </select>
       </div>
       <div class="form-field"><label>المسمى الوظيفي (اختياري)</label><input name="job_title"></div>
@@ -49,7 +49,7 @@
           </td>
           <td>
             <form method="POST" action="/admin/users/<%= u.id %>/can-approve/toggle" style="margin:0;">
-              <button type="submit" class="btn <%= u.can_approve ? 'btn-good' : 'btn-ghost' %> btn-sm"><%= u.can_approve ? 'مفعّلة' : 'غير مفعّلة' %></button>
+              <button type="submit" class="btn <%= u.effective_approve ? 'btn-good' : 'btn-ghost' %> btn-sm"><%= u.effective_approve ? 'مفعّلة' : 'غير مفعّلة' %></button>
             </form>
           </td>
           <td style="font-size:11.5px;">
@@ -72,7 +72,9 @@
 <script>
 function toggleProjectsField(){
   const role = document.getElementById('role-select').value;
-  document.getElementById('projects-field').style.display = (role === 'site_officer') ? 'block' : 'none';
+  // يظهر إسناد المشاريع لأي قالب لا يرى جميع المشاريع (مثل مسؤول الموقع) — من صلاحيات القالب لا من اسمه
+  var opt = document.getElementById('role-select').selectedOptions[0];
+  document.getElementById('projects-field').style.display = (opt && opt.dataset.seesAll === '0') ? 'block' : 'none';
 }
 </script>
 </body>

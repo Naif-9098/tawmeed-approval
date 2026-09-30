@@ -1,0 +1,41 @@
+<%- include('../partials/header', { title: 'الإعدادات والصلاحيات' }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <p style="color:var(--muted); margin-top:-6px;">القالب الوظيفي يعطي كل مستخدم صلاحياته الافتراضية، والاستثناءات تمنح أو تمنع صلاحية لمستخدم واحد دون تغيير زملائه أو إنشاء دور جديد.</p>
+  <div class="card">
+    <div class="pm-toolbar">
+      <input type="search" id="uq" placeholder="ابحث باسم المستخدم أو البريد…" oninput="filterUsers()">
+      <select id="uf" onchange="filterUsers()">
+        <option value="">كل القوالب الوظيفية</option>
+        <% roles.forEach(r => { %><option value="<%= r.code %>"><%= r.name %></option><% }) %>
+      </select>
+      <select id="ux" onchange="filterUsers()">
+        <option value="">الكل</option><option value="1">لديهم استثناءات فقط</option>
+      </select>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>المستخدم</th><th>القالب الوظيفي</th><th>الحالة</th><th>موروثة</th><th>إضافية</th><th>ممنوعة</th><th>النهائية</th><th></th></tr></thead>
+      <tbody id="urows">
+      <% users.forEach(u => { const role = roles.find(r => r.code === u.role); %>
+        <tr data-q="<%= (u.name + ' ' + u.email).toLowerCase() %>" data-role="<%= u.role %>" data-x="<%= (u.allow.length + u.deny.length) ? 1 : 0 %>">
+          <td><b><%= u.name %></b><br><small class="mono" style="color:var(--muted)"><%= u.email %></small></td>
+          <td><%= role ? role.name : u.role %></td>
+          <td><span class="badge <%= u.active ? 'badge-approved' : 'badge-draft' %>"><%= u.active ? 'مفعّل' : 'معطّل' %></span></td>
+          <td><%= u.inherited.length %></td>
+          <td><%= u.allow.length ? u.allow.length : '—' %></td>
+          <td><%= u.deny.length ? u.deny.length : '—' %></td>
+          <td><b><%= u.effective.length %></b></td>
+          <td><a class="btn btn-primary btn-sm" href="/permissions/users/<%= u.id %>">تعديل الصلاحيات</a></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<script>
+function norm(s){return String(s||'').toLowerCase().replace(/[\u064B-\u0652]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');}
+function filterUsers(){var q=norm(document.getElementById('uq').value),f=document.getElementById('uf').value,x=document.getElementById('ux').value;
+document.querySelectorAll('#urows tr').forEach(function(tr){var ok=(!q||norm(tr.dataset.q).indexOf(q)!==-1)&&(!f||tr.dataset.role===f)&&(!x||tr.dataset.x==='1');tr.hidden=!ok;});}
+</script>
+</body>
+</html>

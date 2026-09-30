@@ -39,6 +39,7 @@ app.use('/verify', require('./routes/verify'));
 app.use('/', require('./routes/certificates'));
 app.use('/', require('./routes/workItems'));
 app.use('/', require('./routes/accounting'));
+app.use('/permissions', require('./routes/permissions'));
 
 app.get('/', (req, res) => {
   if (!req.session.user) return res.redirect('/login');
@@ -65,6 +66,15 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ نظام أوامر التعميد يعمل على المنفذ ${PORT}`);
-});
+// نظام الصلاحيات المرن: ترحيل آمن (جداول جديدة فقط) يكتمل **قبل** استقبال أي طلب.
+// إن فشل لأي سبب يُلغى بالكامل (ROLLBACK) ولا يعمل الخادم بصلاحيات ناقصة.
+require('./permission_engine').init(require('./db'))
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`✅ نظام أوامر التعميد يعمل على المنفذ ${PORT}`);
+    });
+  })
+  .catch((e) => {
+    console.error('❌ تعذّر تجهيز نظام الصلاحيات — لم يتغيّر أي شيء في قاعدة البيانات:', e);
+    process.exit(1);
+  });

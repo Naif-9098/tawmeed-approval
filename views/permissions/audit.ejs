@@ -1,0 +1,14 @@
+<%- include('../partials/header', { title: 'سجل تغييرات الصلاحيات' }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <div class="card" style="padding:0;">
+    <% if (!rows.length) { %><div class="empty-state">لا توجد تغييرات مسجلة بعد.</div><% } else { %>
+    <div class="table-wrap"><table>
+      <thead><tr><th>التاريخ والوقت</th><th>بواسطة</th><th>العملية</th><th>التفاصيل</th></tr></thead>
+      <tbody><% rows.forEach(r => { %><tr><td class="mono" style="white-space:nowrap; font-size:12px;"><%= new Date(r.created_at).toLocaleString('ar-SA') %></td><td><%= r.actor_name %></td><td><b><%= r.action %></b></td><td style="white-space:pre-wrap; font-size:12.5px;"><%= r.details || '—' %></td></tr><% }) %></tbody>
+    </table></div>
+    <% } %>
+  </div>
+</div>
+</body>
+</html>

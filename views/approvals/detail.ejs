@@ -54,11 +54,11 @@
 
   <% if (order.status === 'pending_approval') { %>
   <div class="card no-print" style="display:flex; gap:10px; justify-content:center; padding:22px;">
-    <form method="POST" action="/approvals/<%= order.id %>/approve" onsubmit="return confirm('سيتم تسجيل اعتمادك باسمك وتاريخ ووقت العملية. متابعة؟');" style="margin:0;">
+    <% if (perm.has('ORDER_APPROVE')) { %><form method="POST" action="/approvals/<%= order.id %>/approve" onsubmit="return confirm('سيتم تسجيل اعتمادك باسمك وتاريخ ووقت العملية. متابعة؟');" style="margin:0;">
       <button type="submit" class="btn btn-good" style="padding:12px 28px;">✓ اعتماد</button>
-    </form>
-    <button type="button" class="btn btn-bad" style="padding:12px 28px;" onclick="openModal('reject-modal')">✕ رفض</button>
-    <button type="button" class="btn btn-ghost" style="padding:12px 28px;" onclick="openModal('return-modal')">↺ إعادة للتعديل</button>
+    </form><% } %>
+    <% if (perm.has('ORDER_REJECT')) { %><button type="button" class="btn btn-bad" style="padding:12px 28px;" onclick="openModal('reject-modal')">✕ رفض</button><% } %>
+    <% if (perm.has('ORDER_RETURN')) { %><button type="button" class="btn btn-ghost" style="padding:12px 28px;" onclick="openModal('return-modal')">↺ إعادة للتعديل</button><% } %>
   </div>
   <% } %>
 

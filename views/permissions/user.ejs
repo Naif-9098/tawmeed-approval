@@ -1,0 +1,119 @@
+<%- include('../partials/header', { title: 'صلاحيات ' + d.user.name }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <div class="breadcrumbs"><a href="/permissions">المستخدمون</a><span class="crumb-sep">/</span><span class="crumb-current"><%= d.user.name %></span></div>
+  <%
+    const eff = new Set(d.effective), inh = new Set(d.inherited), allow = new Set(d.allow), deny = new Set(d.deny);
+    const savedMsg = { '1': 'تم حفظ الصلاحيات — يطبّقها الخادم فوراً على طلبات المستخدم القادمة.', reset: 'أُعيدت الصلاحيات إلى صلاحيات القالب الوظيفي.', clone: 'تم نسخ الصلاحيات.' };
+  %>
+  <% if (saved && savedMsg[saved]) { %><div class="alert alert-ok"><%= savedMsg[saved] %></div><% } %>
+  <form method="POST" action="/permissions/users/<%= d.user.id %>/review" id="pmForm">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <h3 style="margin:0 0 4px; padding:0; border:0;"><%= d.user.name %> <small class="mono" style="color:var(--muted); font-weight:400;"><%= d.user.email %></small></h3>
+        <span class="badge <%= d.user.active ? 'badge-approved' : 'badge-draft' %>"><%= d.user.active ? 'مفعّل' : 'معطّل' %></span>
+      </div>
+      <div class="form-field" style="min-width:240px;">
+        <label>القالب الوظيفي (الصلاحيات الافتراضية)</label>
+        <select name="role" id="roleSel"><% roles.forEach(r => { %><option value="<%= r.code %>" <%= r.code===d.user.role?'selected':'' %>><%= r.name %></option><% }) %></select>
+      </div>
+    </div>
+    <div class="pm-counts">
+      <div><strong id="cRole"><%= d.inherited.length %></strong><small>موروثة من القالب</small></div>
+      <div><strong id="cAllow"><%= d.allow.length %></strong><small>صلاحيات إضافية</small></div>
+      <div><strong id="cDeny"><%= d.deny.length %></strong><small>ممنوعة يدوياً</small></div>
+      <div class="final"><strong id="cEff"><%= d.effective.length %></strong><small>الصلاحيات النهائية</small></div>
+    </div>
+    <div class="pm-toolbar" style="margin:0;">
+      <input type="search" id="pq" placeholder="ابحث داخل الصلاحيات… (مثال: صرف، اعتماد، مستخلص، نقل)" oninput="filterPerms()">
+      <label style="display:flex; gap:6px; align-items:center; font-size:13px;"><input type="checkbox" id="onlyDanger" onchange="filterPerms()"> الحساسة فقط</label>
+    </div>
+  </div>
+
+  <% REG.MODULES.forEach(m => {
+       const perms = REG.PERMISSIONS.filter(p => p.module === m.id);
+       const scopeIds = Object.keys(REG.SCOPES).filter(sid => perms.some(p => SCOPE_OF[p.key] === sid)); %>
+  <div class="pm-module" data-module="<%= m.id %>">
+    <div class="pm-module-head"><h3><%= m.label %></h3><small><span data-mcount="<%= m.id %>"><%= perms.filter(p => eff.has(p.key)).length %></span> / <%= perms.length %> مفعّلة</small></div>
+    <% scopeIds.forEach(sid => { const S = REG.SCOPES[sid]; %>
+      <div class="pm-row pm-scope" data-search="<%= S.label + ' ' + S.options.map(o => o.label).join(' ') + ' ' + S.options.flatMap(o=>o.keys).join(' ') %>">
+        <span class="pm-eff <%= scopes[sid] !== S.options[0].value ? 'on' : 'off' %>" data-scope-eff="<%= sid %>">✓</span>
+        <div class="pm-text"><b><%= S.label %></b><small>نطاق: يحدد على بيانات من يطبّق المستخدم هذه الصلاحية</small></div>
+        <span class="pm-src none">نطاق</span>
+        <select name="scope_<%= sid %>" data-scope="<%= sid %>" onchange="recalc()">
+          <% S.options.forEach(o => { %><option value="<%= o.value %>" data-keys="<%= o.keys.join(',') %>" <%= scopes[sid]===o.value?'selected':'' %>><%= o.label %></option><% }) %>
+        </select>
+      </div>
+    <% }) %>
+    <% perms.filter(p => !SCOPE_OF[p.key]).forEach(p => {
+         const st = deny.has(p.key) ? 'deny' : (allow.has(p.key) ? 'allow' : 'default'); %>
+      <div class="pm-row <%= p.danger ? 'danger' : '' %>" data-key="<%= p.key %>" data-danger="<%= p.danger ? 1 : 0 %>" data-search="<%= p.label + ' ' + (p.hint||'') + ' ' + m.label + ' ' + p.key %>">
+        <span class="pm-eff <%= eff.has(p.key) ? 'on' : 'off' %>"><%= eff.has(p.key) ? '✓' : '✕' %></span>
+        <div class="pm-text"><b><%= p.label %><% if (p.danger) { %><span class="pm-tag">حساسة</span><% } %></b><% if (p.hint) { %><small><%= p.hint %></small><% } %><code><%= p.key %></code></div>
+        <span class="pm-src <%= st==='allow'?'allow':(st==='deny'?'deny':(inh.has(p.key)?'role':'none')) %>" data-src><%= st==='allow'?'إضافية':(st==='deny'?'ممنوعة يدوياً':(inh.has(p.key)?'من القالب':'—')) %></span>
+        <select name="p_<%= p.key %>" onchange="recalc()">
+          <option value="default" <%= st==='default'?'selected':'' %>>حسب القالب</option>
+          <option value="allow" <%= st==='allow'?'selected':'' %>>سماح إضافي</option>
+          <option value="deny" <%= st==='deny'?'selected':'' %>>منع</option>
+        </select>
+      </div>
+    <% }) %>
+  </div>
+  <% }) %>
+
+  <div class="pm-actions">
+    <span id="dirty" style="margin-inline-end:auto; color:var(--muted); font-size:13px;">لا توجد تغييرات بعد.</span>
+    <a href="/permissions" class="btn btn-ghost">إلغاء</a>
+    <button type="submit" class="btn btn-primary" id="saveBtn" disabled>حفظ التغييرات…</button>
+  </div>
+  </form>
+
+  <div class="card" style="margin-top:16px;">
+    <h3 style="margin-top:0;">أدوات إضافية</h3>
+    <div class="pm-tools" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+      <form method="POST" action="/permissions/users/<%= d.user.id %>/reset" onsubmit="return confirm('ستُحذف كل الاستثناءات (الإضافية والممنوعة) ويعود المستخدم لصلاحيات قالبه الوظيفي فقط. متابعة؟');" style="margin:0;">
+        <button class="btn btn-ghost" <%= (d.allow.length + d.deny.length) ? '' : 'disabled' %>>إعادة الضبط إلى صلاحيات القالب</button>
+      </form>
+      <form method="POST" action="/permissions/users/<%= d.user.id %>/clone" onsubmit="return this.source_id.value && confirm('ستصبح صلاحيات هذا المستخدم مطابقة تماماً للمستخدم المختار (نفس القالب ونفس الاستثناءات). متابعة؟');" style="margin:0; display:flex; gap:6px;">
+        <select name="source_id" required><option value="">نسخ صلاحيات من مستخدم…</option><% others.forEach(o => { %><option value="<%= o.id %>"><%= o.name %></option><% }) %></select>
+        <button class="btn btn-ghost">نسخ</button>
+      </form>
+      <form method="POST" action="/permissions/users/<%= d.user.id %>/save-as-role" style="margin:0; display:flex; gap:6px;">
+        <input name="name" required placeholder="اسم قالب جديد من صلاحياته الحالية">
+        <button class="btn btn-ghost">حفظ كقالب وظيفي</button>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+var ROLE_KEYS = <%- JSON.stringify(roleKeys) %>;
+var INITIAL = null;
+function norm(s){return String(s||'').toLowerCase().replace(/[\u064B-\u0652]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');}
+function state(){var f=document.getElementById('pmForm');return new URLSearchParams(new FormData(f)).toString();}
+function recalc(){
+  var role=document.getElementById('roleSel').value, base=new Set(ROLE_KEYS[role]||[]), eff=new Set(base), nA=0, nD=0;
+  document.querySelectorAll('.pm-row[data-key]').forEach(function(r){var k=r.dataset.key,v=r.querySelector('select').value;
+    if(v==='allow'){eff.add(k);if(!base.has(k))nA++;} if(v==='deny'){eff.delete(k);if(base.has(k))nD++;}
+    var src=r.querySelector('[data-src]');src.className='pm-src '+(v==='allow'?'allow':v==='deny'?'deny':(base.has(k)?'role':'none'));
+    src.textContent=v==='allow'?'إضافية':v==='deny'?'ممنوعة يدوياً':(base.has(k)?'من القالب':'—');});
+  document.querySelectorAll('select[data-scope]').forEach(function(s){var sel=s.selectedOptions[0],want=new Set((sel.dataset.keys||'').split(',').filter(Boolean));
+    Array.prototype.forEach.call(s.options,function(o){(o.dataset.keys||'').split(',').filter(Boolean).forEach(function(k){
+      if(want.has(k)){if(!eff.has(k)){eff.add(k);nA++;}}else if(eff.has(k)){eff.delete(k);if(base.has(k))nD++;}});});
+    var e=document.querySelector('[data-scope-eff="'+s.dataset.scope+'"]');e.className='pm-eff '+(s.selectedIndex>0?'on':'off');});
+  document.querySelectorAll('.pm-row[data-key]').forEach(function(r){var on=eff.has(r.dataset.key),e=r.querySelector('.pm-eff');e.className='pm-eff '+(on?'on':'off');e.textContent=on?'✓':'✕';});
+  document.querySelectorAll('[data-mcount]').forEach(function(el){var n=0;el.closest('.pm-module').querySelectorAll('.pm-row[data-key]').forEach(function(r){if(eff.has(r.dataset.key))n++;});el.textContent=n;});
+  document.getElementById('cRole').textContent=base.size;document.getElementById('cAllow').textContent=nA;document.getElementById('cDeny').textContent=nD;document.getElementById('cEff').textContent=eff.size;
+  var dirty=INITIAL!==null&&state()!==INITIAL;document.getElementById('saveBtn').disabled=!dirty;
+  document.getElementById('dirty').textContent=dirty?'لديك تغييرات غير محفوظة — ستظهر مراجعة قبل الحفظ.':'لا توجد تغييرات بعد.';
+}
+function filterPerms(){var q=norm(document.getElementById('pq').value),dg=document.getElementById('onlyDanger').checked;
+  document.querySelectorAll('.pm-module').forEach(function(m){var any=false;m.querySelectorAll('.pm-row').forEach(function(r){
+    var ok=(!q||q.split(/\s+/).every(function(w){return norm(r.dataset.search).indexOf(w)!==-1;}))&&(!dg||r.dataset.danger==='1');r.hidden=!ok;if(ok)any=true;});m.hidden=!any;});}
+document.getElementById('roleSel').addEventListener('change',recalc);
+INITIAL=state();recalc();
+window.addEventListener('beforeunload',function(e){if(!document.getElementById('saveBtn').disabled&&!window.__submitting){e.preventDefault();e.returnValue='';}});
+document.getElementById('pmForm').addEventListener('submit',function(){window.__submitting=true;});
+</script>
+</body>
+</html>

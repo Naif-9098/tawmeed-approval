@@ -4,7 +4,10 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { canAccessProject } = require('../projectAccess');
-const { isManager, seesAllProjects, canApprove, canCreateCertificates, canRequestTransferFor, canConfirmPayment } = require('../permissions');
+const { has, canViewAllCertificates, canEditOwnCertificates, canEditAllCertificates, canReviewCertificates, canCreateCertificates, canRequestCertTransferFor, canConfirmPayment } = require('../permissions');
+const canApproveCert = (u) => has(u, 'CERTIFICATE_APPROVE');
+const canRejectCert = (u) => has(u, 'CERTIFICATE_REJECT');
+const canReturnCert = (u) => has(u, 'CERTIFICATE_RETURN');
 const { getSetting } = require('../settings');
 
 const STATUS_LABELS = {
@@ -35,8 +38,8 @@ async function getOrderWithProject(orderId) {
 }
 
 function canViewOrderForCert(user, order) {
-  if (seesAllProjects(user)) return true;
-  return order.created_by === user.id;
+  if (canViewAllCertificates(user)) return true; // CERTIFICATE_VIEW_ALL
+  return order.created_by === user.id;           // مستخلصات أوامره (الملكية)
 }
 
 async function getCertFull(certId) {
@@ -64,9 +67,8 @@ async function getSpentForOrder(orderId, excludeCertId) {
 function canEditCert(cert, user) {
   if (!cert || !user) return false;
   if (!(cert.status === 'draft' || cert.status === 'returned_for_edit')) return false;
-  if (isManager(user)) return true;
-  if (user.role === 'technical_office') return true;
-  return cert.created_by === user.id;
+  if (canEditAllCertificates(user)) return true; // CERTIFICATE_EDIT_ALL
+  return canEditOwnCertificates(user) && cert.created_by === user.id; // CERTIFICATE_EDIT_OWN + الملكية
 }
 
 async function recalcAndSaveItems(client, certId, b) {
@@ -156,8 +158,9 @@ router.get('/certificates/:id', async (req, res) => {
   res.render('certificates/view', {
     ...data, statusLabels: STATUS_LABELS, financialStatusLabels: FINANCIAL_STATUS_LABELS,
     paymentMethodLabels: PAYMENT_METHOD_LABELS, payMethodLabels: PAY_METHOD_LABELS,
-    canEdit: canEditCert(data.cert, user), canApprove: canApprove(user),
-    canRequestTransfer: canRequestTransferFor(user, data.cert.created_by),
+    canEdit: canEditCert(data.cert, user), canApprove: canReviewCertificates(user),
+    canApproveCert: canApproveCert(user), canRejectCert: canRejectCert(user), canReturnCert: canReturnCert(user),
+    canRequestTransfer: canRequestCertTransferFor(user, data.cert.created_by),
     canConfirmPayment: canConfirmPayment(user), spent, remaining, audit,
   });
 });
@@ -228,7 +231,7 @@ router.post('/certificates/:id/submit', async (req, res) => {
 });
 
 /* ---------------- اعتماد / رفض / إعادة للتعديل ---------------- */
-router.post('/certificates/:id/approve', requirePermission(canApprove), async (req, res) => {
+router.post('/certificates/:id/approve', requirePermission(canApproveCert), async (req, res) => {
   const user = req.session.user;
   const certId = req.params.id;
   const cert = (await db.query('SELECT * FROM payment_certificates WHERE id = $1', [certId])).rows[0];
@@ -244,7 +247,7 @@ router.post('/certificates/:id/approve', requirePermission(canApprove), async (r
   res.redirect(`/certificates/${certId}`);
 });
 
-router.post('/certificates/:id/reject', requirePermission(canApprove), async (req, res) => {
+router.post('/certificates/:id/reject', requirePermission(canRejectCert), async (req, res) => {
   const user = req.session.user;
   const certId = req.params.id;
   const reason = (req.body.reason || '').trim();
@@ -258,7 +261,7 @@ router.post('/certificates/:id/reject', requirePermission(canApprove), async (re
   res.redirect(`/certificates/${certId}`);
 });
 
-router.post('/certificates/:id/return', requirePermission(canApprove), async (req, res) => {
+router.post('/certificates/:id/return', requirePermission(canReturnCert), async (req, res) => {
   const user = req.session.user;
   const certId = req.params.id;
   const note = (req.body.note || '').trim();
@@ -278,7 +281,7 @@ router.post('/certificates/:id/request-transfer', async (req, res) => {
   const certId = req.params.id;
   const cert = (await db.query('SELECT * FROM payment_certificates WHERE id = $1', [certId])).rows[0];
   if (!cert) return res.status(404).render('error', { title: 'غير موجود', message: 'المستخلص غير موجود.' });
-  if (!canRequestTransferFor(user, cert.created_by)) {
+  if (!canRequestCertTransferFor(user, cert.created_by)) {
     return res.status(403).render('error', { title: 'غير مصرح', message: 'لا يمكنك تحويل مستخلص لم تُنشئه أنت.' });
   }
   if (cert.status !== 'approved') {

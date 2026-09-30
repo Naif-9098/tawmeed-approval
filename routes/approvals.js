@@ -4,7 +4,8 @@ const db = require('../db');
 const { requireLogin, requirePermission } = require('../middleware/auth');
 const { logAction } = require('../audit');
 const { getAccessibleProjectIds, canAccessProject } = require('../projectAccess');
-const { isManager, canApprove } = require('../permissions');
+const { has, canApproveOrders, canApproveAnyOrder } = require('../permissions');
+const canApprove = canApproveOrders; // الدخول لقسم طلبات الاعتماد = أي من (اعتماد / رفض / إعادة)
 
 const STATUS_LABELS = {
   draft: 'مسودة',
@@ -31,8 +32,8 @@ router.get('/', async (req, res) => {
     projectFilter = ` AND (o.project_id IS NULL OR o.project_id = ANY($${params.length}))`;
   }
   let managerBypass = '';
-  if (isManager(user)) {
-    // مدير المشاريع يرى كل الطلبات بلا قيد إسناد
+  if (canApproveAnyOrder(user)) {
+    // ORDER_APPROVE_ANY: يرى كل الطلبات بلا قيد إسناد
     managerBypass = ' OR true';
   }
 
@@ -68,7 +69,7 @@ async function getOrderFull(orderId) {
 
 /** تحقق: هل يُسمح لهذا المستخدم بمراجعة/الرد على هذا الأمر تحديدًا؟ */
 async function checkApproverAllowed(order, user) {
-  if (isManager(user)) return true;
+  if (canApproveAnyOrder(user)) return true; // ORDER_APPROVE_ANY
   if (order.assigned_approver_id && order.assigned_approver_id !== user.id) return false;
   return canAccessProject(user, order.project_id);
 }
@@ -93,7 +94,7 @@ async function currentStep(orderId, order) {
 }
 
 /* -------- اعتماد -------- */
-router.post('/:id/approve', async (req, res) => {
+router.post('/:id/approve', requirePermission((u) => has(u, 'ORDER_APPROVE')), async (req, res) => {
   const orderId = req.params.id;
   const user = req.session.user;
   const orderRes = await db.query('SELECT * FROM orders WHERE id=$1', [orderId]);
@@ -146,7 +147,7 @@ router.post('/:id/approve', async (req, res) => {
 });
 
 /* -------- رفض -------- */
-router.post('/:id/reject', async (req, res) => {
+router.post('/:id/reject', requirePermission((u) => has(u, 'ORDER_REJECT')), async (req, res) => {
   const orderId = req.params.id;
   const user = req.session.user;
   const reason = (req.body.reason || '').trim();
@@ -186,7 +187,7 @@ router.post('/:id/reject', async (req, res) => {
 });
 
 /* -------- إعادة للتعديل -------- */
-router.post('/:id/return', async (req, res) => {
+router.post('/:id/return', requirePermission((u) => has(u, 'ORDER_RETURN')), async (req, res) => {
   const orderId = req.params.id;
   const user = req.session.user;
   const note = (req.body.note || '').trim();

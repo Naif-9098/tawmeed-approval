@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <title>طباعة أمر تعميد <%= order.project_order_no || order.order_no %></title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  :root{ --ink:#111315; --line:#111315; --line-soft:#B9BEC4; --grey-label:#EAEAEA; --amber:#E8960C; --navy:#16233A; --good:#1E7D4B; --bad:#B3261E; }
+  :root{ --ink:#111315; --line:#111315; --line-soft:#B9BEC4; --grey-label:#EAEAEA; --amber:#111111; --navy:#111111; --good:#1E7D4B; --bad:#B3261E; }
   *{box-sizing:border-box;}
-  body{font-family:'IBM Plex Sans Arabic','Tajawal',sans-serif; color:var(--ink); margin:0; padding:24px; background:#fff;}
+  body{font-family:'Cairo',Tahoma,sans-serif; color:var(--ink); margin:0; padding:24px; background:#fff;}
   .mono{font-family:'JetBrains Mono',monospace;}
   .toolbar{text-align:center; margin-bottom:16px;}
-  .toolbar button{font-family:'Tajawal'; font-weight:700; background:var(--amber); color:var(--navy); border:none; padding:10px 22px; border-radius:6px; cursor:pointer;}
+  .toolbar button{font-family:'Cairo'; font-weight:700; background:#111; color:#fff; border:none; padding:10px 22px; border-radius:6px; cursor:pointer;}
   .sheet{max-width:900px; margin:0 auto; border:1.5px solid var(--line); border-radius:2px;}
   .head-row{display:grid; grid-template-columns:1fr 1fr 1fr; border-bottom:2.5px solid var(--line); padding:14px 16px; align-items:center;}
-  .head-row h2{font-family:'Tajawal'; font-weight:900; font-size:26px; margin:0; text-align:left;}
+  .head-row h2{font-family:'Cairo'; font-weight:900; font-size:26px; margin:0; text-align:left;}
   .ordno{text-align:center; font-family:'JetBrains Mono'; font-weight:700; color:var(--bad); font-size:16px;}
   .info-grid{display:grid; grid-template-columns:1fr 2fr 1fr 2fr; font-size:13.5px;}
   .info-grid .lbl{background:var(--grey-label); border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft); padding:8px 10px; font-weight:700; text-align:right;}
@@ -21,7 +21,7 @@
   table{width:100%; border-collapse:collapse; margin:16px 0;}
   thead th{border:1px solid var(--line); font-size:12.5px; padding:8px; text-align:center;}
   tbody td{border:1px solid var(--line-soft); padding:7px; text-align:center; font-size:13px;}
-  .section-title{font-family:'Tajawal'; font-weight:900; font-size:17px; margin:20px 16px 8px;}
+  .section-title{font-family:'Cairo'; font-weight:900; font-size:17px; margin:20px 16px 8px;}
   .box{margin:0 16px 16px; padding:10px 14px; border:1px solid var(--line-soft); border-radius:4px; font-size:13.5px; white-space:pre-wrap;}
   .totals{padding:10px 16px; text-align:left; font-weight:700; font-size:14px;}
   .sig-area{display:grid; grid-template-columns:1fr 1fr; border-top:2px solid var(--line); margin-top:10px;}
@@ -42,7 +42,7 @@
   <div class="sheet">
     <div class="head-row">
       <div class="ordno">رقم الأمر<br><%= order.project_order_no || order.order_no %></div>
-      <div style="text-align:center; font-size:11px; color:#666;">WORK ASSIGNMENT ORDER</div>
+      <div style="text-align:center; font-size:10.5px; color:#666; letter-spacing:.8px;"><img src="/rateim-logo.svg" alt="RATEIM" style="height:46px; display:block; margin:0 auto 4px;">WORK ASSIGNMENT ORDER</div>
       <h2>أمر تعميد</h2>
     </div>
     <div class="info-grid">

@@ -16,7 +16,7 @@
     <form method="POST" action="/projects/<%= project.id %>/access/add" style="display:flex; gap:10px;">
       <select name="user_id" style="flex:1;">
         <% allUsers.forEach(u => { %>
-          <option value="<%= u.id %>"><%= u.name %> — <%= u.role === 'admin' ? 'مدير النظام' : (u.role === 'approver' ? 'معتمد' : 'موظف') %></option>
+          <option value="<%= u.id %>"><%= u.name %> — <%= roleNames[u.role] || u.role %></option>
         <% }) %>
       </select>
       <button type="submit" class="btn btn-primary">+ إضافة</button>
@@ -33,7 +33,7 @@
         <% granted.forEach(u => { %>
         <tr>
           <td><%= u.name %></td>
-          <td><%= u.role === 'admin' ? 'مدير النظام' : (u.role === 'approver' ? 'معتمد' : 'موظف') %></td>
+          <td><%= roleNames[u.role] || u.role %></td>
           <td>
             <form method="POST" action="/projects/<%= project.id %>/access/<%= u.id %>/remove" style="margin:0;">
               <button type="submit" class="btn btn-ghost btn-sm">إزالة</button>

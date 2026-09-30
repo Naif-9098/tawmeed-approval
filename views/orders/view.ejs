@@ -48,10 +48,11 @@
     </div>
   </div>
 
-  <% if (perm.isManager) { %>
+  <% if (perm.canMoveOrders || perm.canAssignApprover) { %>
   <div class="card">
-    <h3 style="margin-top:0;">أدوات مدير النظام</h3>
+    <h3 style="margin-top:0;">أدوات إدارة الأمر</h3>
     <div class="form-grid">
+      <% if (perm.canMoveOrders) { %>
       <div>
         <label style="display:block; font-size:12.5px; font-weight:700; margin-bottom:5px;">نقل الأمر لمشروع آخر</label>
         <form method="POST" action="/orders/<%= order.id %>/move" style="display:flex; gap:8px;" onsubmit="return confirm('سيتم نقل هذا الأمر إلى المشروع المحدد وتوليد رقم جديد له داخله. متابعة؟');">
@@ -64,6 +65,8 @@
           <button type="submit" class="btn btn-ghost btn-sm">نقل</button>
         </form>
       </div>
+      <% } %>
+      <% if (perm.canAssignApprover) { %>
       <div>
         <label style="display:block; font-size:12.5px; font-weight:700; margin-bottom:5px;">تعيين المعتمد المسؤول عن هذا الأمر</label>
         <form method="POST" action="/orders/<%= order.id %>/assign-approver" style="display:flex; gap:8px;">
@@ -76,6 +79,7 @@
           <button type="submit" class="btn btn-ghost btn-sm">حفظ</button>
         </form>
       </div>
+      <% } %>
     </div>
   </div>
   <% } %>

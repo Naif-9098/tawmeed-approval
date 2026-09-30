@@ -74,11 +74,11 @@
 
   <% if (cert.status === 'pending_review' && canApprove) { %>
   <div class="card no-print" style="display:flex; gap:10px; justify-content:center; padding:22px;">
-    <form method="POST" action="/certificates/<%= cert.id %>/approve" onsubmit="return confirm('سيتم تسجيل اعتمادك على هذا المستخلص. متابعة؟');" style="margin:0;">
+    <% if (canApproveCert) { %><form method="POST" action="/certificates/<%= cert.id %>/approve" onsubmit="return confirm('سيتم تسجيل اعتمادك على هذا المستخلص. متابعة؟');" style="margin:0;">
       <button type="submit" class="btn btn-good" style="padding:12px 28px;">✓ اعتماد</button>
-    </form>
-    <button type="button" class="btn btn-bad" style="padding:12px 28px;" onclick="openModal('reject-modal')">✕ رفض</button>
-    <button type="button" class="btn btn-ghost" style="padding:12px 28px;" onclick="openModal('return-modal')">↺ إعادة للتعديل</button>
+    </form><% } %>
+    <% if (canRejectCert) { %><button type="button" class="btn btn-bad" style="padding:12px 28px;" onclick="openModal('reject-modal')">✕ رفض</button><% } %>
+    <% if (canReturnCert) { %><button type="button" class="btn btn-ghost" style="padding:12px 28px;" onclick="openModal('return-modal')">↺ إعادة للتعديل</button><% } %>
   </div>
   <% } %>
 

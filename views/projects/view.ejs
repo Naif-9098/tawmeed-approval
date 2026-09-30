@@ -12,9 +12,9 @@
     </div>
     <% if (canManage) { %>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <a href="/projects/<%= project.id %>/edit" class="btn btn-ghost">تعديل المشروع</a>
-      <a href="/projects/<%= project.id %>/access" class="btn btn-ghost">صلاحيات الوصول</a>
-      <% if (project.status === 'archived') { %>
+      <% if (canEditProject) { %><a href="/projects/<%= project.id %>/edit" class="btn btn-ghost">تعديل المشروع</a><% } %>
+      <% if (canAssignProjectUsers) { %><a href="/projects/<%= project.id %>/access" class="btn btn-ghost">صلاحيات الوصول</a><% } %>
+      <% if (!canArchiveProject) { %><% } else if (project.status === 'archived') { %>
         <form method="POST" action="/projects/<%= project.id %>/activate" style="margin:0;"><button class="btn btn-primary">إعادة تفعيل</button></form>
       <% } else { %>
         <form method="POST" action="/projects/<%= project.id %>/archive" style="margin:0;" onsubmit="return confirm('سيتم أرشفة المشروع، ولن يمكن إنشاء أوامر جديدة بداخله حتى تُعاد تفعيله. متابعة؟');"><button class="btn btn-ghost">أرشفة</button></form>

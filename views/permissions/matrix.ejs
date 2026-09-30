@@ -1,0 +1,37 @@
+<%- include('../partials/header', { title: 'مصفوفة الصلاحيات' }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <div class="card">
+    <div class="pm-toolbar">
+      <input type="search" id="mq" placeholder="ابحث عن صلاحية… (صرف، اعتماد، نقل، مستخلص)" oninput="mx()">
+      <select id="mm" onchange="mx()"><option value="">كل الوحدات</option><% REG.MODULES.forEach(m => { %><option value="<%= m.id %>"><%= m.label %></option><% }) %></select>
+      <select id="mr" onchange="mx()"><option value="">كل القوالب</option><% roles.forEach(r => { %><option value="<%= r.code %>"><%= r.name %></option><% }) %></select>
+    </div>
+    <div class="pm-legend"><span><b class="c-role">✓</b>من القالب</span><span><b class="c-allow">✓</b>استثناء إضافي</span><span><b class="c-deny">✕</b>ممنوع يدوياً</span><span><b class="c-none">✕</b>غير مسموح</span><span>— اضغط اسم المستخدم لتعديل صلاحياته</span></div>
+    <div class="table-wrap" style="max-height:70vh; border:1px solid var(--line); border-radius:var(--radius);">
+    <table class="pm-mx">
+      <thead><tr><th class="perm">الصلاحية</th><% users.forEach(u => { %><th data-urole="<%= u.role %>"><a href="/permissions/users/<%= u.id %>"><%= u.name %></a><br><small style="font-weight:400; color:var(--muted)"><%= (roles.find(r=>r.code===u.role)||{}).name || u.role %></small></th><% }) %></tr></thead>
+      <tbody>
+      <% REG.MODULES.forEach(m => { %>
+        <tr class="grp" data-mod="<%= m.id %>"><td colspan="<%= users.length + 1 %>"><%= m.label %></td></tr>
+        <% REG.PERMISSIONS.filter(p => p.module === m.id).forEach(p => { %>
+          <tr data-mod="<%= m.id %>" data-search="<%= p.label + ' ' + p.key + ' ' + m.label %>">
+            <td class="perm"><%= p.label %><% if (p.danger) { %><span class="pm-tag">حساسة</span><% } %></td>
+            <% users.forEach(u => { const on = u.effective.includes(p.key), src = u.deny.includes(p.key) ? 'deny' : (u.allow.includes(p.key) ? 'allow' : (u.inherited.includes(p.key) ? 'role' : 'none')); %>
+              <td class="c-<%= src %>" data-urole="<%= u.role %>" title="<%= on ? (src==='allow'?'مسموح — استثناء':'مسموح — من القالب') : (src==='deny'?'ممنوع يدوياً':'غير مسموح') %>"><%= on ? '✓' : '✕' %></td>
+            <% }) %>
+          </tr>
+        <% }) %>
+      <% }) %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<script>
+function norm(s){return String(s||'').toLowerCase().replace(/[\u064B-\u0652]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');}
+function mx(){var q=norm(document.getElementById('mq').value),m=document.getElementById('mm').value,r=document.getElementById('mr').value;
+ document.querySelectorAll('.pm-mx tbody tr').forEach(function(tr){var okm=!m||tr.dataset.mod===m;var okq=tr.classList.contains('grp')||!q||norm(tr.dataset.search).indexOf(q)!==-1;tr.hidden=!(okm&&okq);});
+ document.querySelectorAll('.pm-mx [data-urole]').forEach(function(c){c.hidden=!!r&&c.dataset.urole!==r;});}
+</script>
+</body>
+</html>

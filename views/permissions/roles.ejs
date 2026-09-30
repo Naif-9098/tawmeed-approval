@@ -1,0 +1,39 @@
+<%- include('../partials/header', { title: 'القوالب الوظيفية' }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <div class="pm-split">
+    <div class="card pm-list">
+      <form method="POST" action="/permissions/roles/new" style="display:flex; gap:6px; margin-bottom:10px;"><input name="name" required placeholder="قالب وظيفي جديد…" style="flex:1; min-width:0;"><button class="btn btn-primary btn-sm">إضافة</button></form>
+      <% roles.forEach(r => { %><a href="/permissions/roles/<%= r.code %>" class="<%= role && role.code===r.code ? 'active' : '' %>"><b><%= r.name %></b><small><%= r.keys.length %> صلاحية · <%= r.userCount %> مستخدم<%= r.is_system ? ' · أساسي' : '' %></small></a><% }) %>
+    </div>
+    <div>
+    <% if (!role) { %>
+      <div class="card"><div class="empty-state">اختر قالباً وظيفياً لتعديل صلاحياته الافتراضية. القوالب الأساسية هي الأدوار الحالية نفسها (مدير المشاريع، مسؤول الموقع، المكتب الفني، المحاسب...) بصلاحياتها كما كانت تماماً.</div></div>
+    <% } else { %>
+      <% if (typeof saved !== 'undefined' && saved) { %><div class="alert alert-ok"><%= saved==='created' ? 'أُنشئ القالب. عدّل صلاحياته ثم احفظ.' : 'حُفظ القالب وطُبّق فوراً على كل المسند إليهم.' %></div><% } %>
+      <form method="POST" action="/permissions/roles/<%= role.code %>/review">
+      <div class="card">
+        <div class="form-grid">
+          <div class="form-field"><label>اسم القالب</label><input name="name" value="<%= role.name %>" required></div>
+          <div class="form-field"><label>وصف مختصر</label><input name="description" value="<%= role.description || '' %>"></div>
+        </div>
+        <p style="color:var(--muted); font-size:13px; margin:10px 0 0;">تعديل القالب يُطبَّق عند الحفظ على <b><%= role.userCount %></b> مستخدم مسند إليه، مع بقاء استثناءاتهم الفردية كما هي. رمز القالب: <code class="mono"><%= role.code %></code></p>
+      </div>
+      <% REG.MODULES.forEach(m => { const perms = REG.PERMISSIONS.filter(p => p.module === m.id); %>
+        <div class="pm-module">
+          <div class="pm-module-head"><h3><%= m.label %></h3><small><a href="#" onclick="tick('<%= m.id %>',true);return false;">تحديد الكل</a> · <a href="#" onclick="tick('<%= m.id %>',false);return false;">إلغاء الكل</a></small></div>
+          <% perms.forEach(p => { %><label class="pm-check <%= p.danger?'danger':'' %>" data-m="<%= m.id %>"><input type="checkbox" name="k_<%= p.key %>" <%= role.keys.includes(p.key)?'checked':'' %>><span><%= p.label %><% if (p.danger) { %><span class="pm-tag">حساسة</span><% } %> <code class="mono" style="font-size:10.5px; color:var(--faint)"><%= p.key %></code></span></label><% }) %>
+        </div>
+      <% }) %>
+      <div class="pm-actions"><button class="btn btn-primary">مراجعة وحفظ القالب…</button></div>
+      </form>
+      <% if (!role.is_system && role.userCount === 0) { %>
+        <form method="POST" action="/permissions/roles/<%= role.code %>/delete" onsubmit="return confirm('حذف القالب «<%= role.name %>»؟ (غير مسند لأي مستخدم، فلا تتغير أي صلاحية)');" style="margin-top:8px;"><button class="btn btn-bad btn-sm">حذف القالب</button></form>
+      <% } %>
+    <% } %>
+    </div>
+  </div>
+</div>
+<script>function tick(m,on){document.querySelectorAll('.pm-check[data-m="'+m+'"] input').forEach(function(c){c.checked=on;});}</script>
+</body>
+</html>

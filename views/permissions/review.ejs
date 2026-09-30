@@ -1,0 +1,24 @@
+<%- include('../partials/header', { title: 'مراجعة التغييرات' }) %>
+<div class="wrap">
+  <%- include('_tabs', { tab }) %>
+  <div class="breadcrumbs"><a href="/permissions">المستخدمون</a><span class="crumb-sep">/</span><a href="/permissions/users/<%= d.user.id %>"><%= d.user.name %></a><span class="crumb-sep">/</span><span class="crumb-current">مراجعة التغييرات</span></div>
+  <div class="card">
+    <h3 style="margin-top:0;">مراجعة التغييرات على صلاحيات <%= d.user.name %> قبل الحفظ</h3>
+    <% if (roleChanged) { %><div class="pm-change" style="font-weight:700;">القالب الوظيفي: «<%= oldRole ? oldRole.name : d.user.role %>» ← «<%= newRole.name %>»</div><% } %>
+    <% if (!changes.length) { %>
+      <div class="empty-state">لا يوجد أي تغيير في الصلاحيات النهائية<%= roleChanged ? ' (تغيّر مصدر الصلاحيات فقط)' : '' %>.</div>
+    <% } else { %>
+      <% changes.forEach(c => { %><div class="pm-change <%= c.to ? 'grant' : 'revoke' %> <%= c.p.danger ? 'danger' : '' %>"><%= c.p.label %> <code class="mono" style="font-size:11px; color:var(--muted)"><%= c.p.key %></code><% if (c.p.danger) { %><span class="pm-tag">حساسة</span><% } %></div><% }) %>
+    <% } %>
+    <% if (dangerGrants.length) { %><div class="pm-warn">تنبيه: هذا الحفظ يمنح <%= dangerGrants.length %> صلاحية حساسة. تأكد أن هذا مقصود.</div><% } %>
+    <form method="POST" action="/permissions/users/<%= d.user.id %>/save" style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;" <% if (dangerGrants.length) { %>onsubmit="return confirm('تأكيد منح صلاحيات حساسة؟');"<% } %>>
+      <input type="hidden" name="role" value="<%= roleCode %>">
+      <input type="hidden" name="allow" value="<%= allow.join(',') %>">
+      <input type="hidden" name="deny" value="<%= deny.join(',') %>">
+      <a href="/permissions/users/<%= d.user.id %>" class="btn btn-ghost">رجوع للتعديل</a>
+      <button class="btn btn-primary" <%= (!changes.length && !roleChanged) ? 'disabled' : '' %>>تأكيد وحفظ التغييرات</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>
